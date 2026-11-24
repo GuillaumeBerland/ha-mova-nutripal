@@ -10,6 +10,7 @@ from .const import DEFAULTS, DOMAIN
 from .planner import plan
 from .calibration import Calibration, effective_weight, near_meal, number
 from .control import manual_allowed, confirm_pending
+from .presentation import next_scheduled_meal
 
 _LOGGER = logging.getLogger(__name__)
 TZ = ZoneInfo('Europe/Paris')
@@ -56,6 +57,10 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                     manual_result=self.state['last_result'], manual_pending=self.state['pending'] is not None,
                     threshold_setting=options['threshold'], max_setting=options['max_complement'],
                     reference_setting=options['portion_weight'], target_setting=options['target'])
+        # Display-only: never used by the hybrid decision or command guards.
+        next_meal = next_scheduled_meal(data.get('schedule'), now) if data.get('online') is True else None
+        data['next_meal'] = next_meal[0] if next_meal else None
+        data['next_meal_portions'] = next_meal[1] if next_meal else None
         raw = data.get('device_status')
         data['status_text'] = {1:'idle',2:'feeding',5:'supplements',6:'fault',7:'food_fault',8:'supplement_fault'}.get(raw, 'unknown') if raw is not None else None
         w, f = data.get('warning_mask'), data.get('fault_mask')

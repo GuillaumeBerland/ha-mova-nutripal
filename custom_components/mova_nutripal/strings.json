@@ -44,22 +44,22 @@
         "name": "Bowl weight"
       },
       "configured_weight": {
-        "name": "Configured portion weight"
+        "name": "MOVA nominal portion weight"
       },
       "calibration_weight": {
-        "name": "Reference portion weight"
+        "name": "Effective portion weight"
       },
       "estimated_distributed": {
-        "name": "Estimated distributed today"
+        "name": "Estimated kibble dispensed today"
       },
       "forecast": {
-        "name": "Forecast total distribution"
+        "name": "Forecast distribution today"
       },
       "budget": {
-        "name": "Estimated supplement budget"
+        "name": "Remaining extra kibble budget"
       },
       "target": {
-        "name": "Daily target"
+        "name": "Daily distribution target"
       },
       "meals_today": {
         "name": "Eating events today"
@@ -74,28 +74,28 @@
         "name": "Portions yesterday"
       },
       "supplement_remaining": {
-        "name": "Remaining supplement portions"
+        "name": "Supplement stock (MOVA value)"
       },
       "remaining_portions": {
-        "name": "Remaining scheduled portions"
+        "name": "Scheduled portions remaining today"
       },
       "suggested_portions": {
         "name": "Simulated extra portions"
       },
       "device_status": {
-        "name": "Device status"
+        "name": "Raw device status code"
       },
       "warning_mask": {
-        "name": "Warning mask"
+        "name": "Warning bitmask"
       },
       "fault_mask": {
-        "name": "Fault mask"
+        "name": "Fault bitmask"
       },
       "feeding_mode": {
-        "name": "Feeding mode"
+        "name": "Raw feeding mode code"
       },
       "sd_card_status": {
-        "name": "SD card status"
+        "name": "Raw SD card status code"
       },
       "decision": {
         "name": "Simulated decision",
@@ -103,7 +103,7 @@
           "unavailable": "Data unavailable",
           "schedule_uncertain": "Schedule uncertain",
           "device_not_ready": "Device not ready",
-          "budget_reached": "Budget reached",
+          "budget_reached": "Budget below one portion",
           "meal_soon": "Scheduled meal soon",
           "bowl_not_empty": "Bowl not empty",
           "would_feed": "Would feed (simulation)"
@@ -116,10 +116,10 @@
         "name": "Desiccant remaining life"
       },
       "measured_weight": {
-        "name": "Calibrated portion weight"
+        "name": "Calibrated median portion weight"
       },
       "calibration_samples": {
-        "name": "Calibration samples"
+        "name": "Valid calibration samples"
       },
       "status_text": {
         "name": "Feeder status",
@@ -134,9 +134,9 @@
         }
       },
       "manual_state": {
-        "name": "Manual supplement permission",
+        "name": "Manual supplement availability",
         "state": {
-          "disabled": "Disabled",
+          "disabled": "Disabled in settings",
           "pending": "Command awaiting verification",
           "cooldown": "Cooldown",
           "blocked": "Conditions not met",
@@ -144,7 +144,7 @@
         }
       },
       "manual_result": {
-        "name": "Last manual command result",
+        "name": "Last manual command",
         "state": {
           "none": "No command",
           "pending": "Pending",
@@ -152,6 +152,12 @@
           "uncertain": "Uncertain result",
           "acknowledged": "Manually acknowledged"
         }
+      },
+      "next_meal": {
+        "name": "Next scheduled meal"
+      },
+      "next_meal_portions": {
+        "name": "Next meal portions"
       }
     },
     "binary_sensor": {
@@ -168,7 +174,7 @@
         "name": "Camera enabled"
       },
       "simulation": {
-        "name": "Simulation mode"
+        "name": "Feeding simulation active"
       },
       "has_warning": {
         "name": "Active warning"
@@ -177,38 +183,38 @@
         "name": "Active fault"
       },
       "calibration_enabled": {
-        "name": "Passive calibration"
+        "name": "Passive calibration enabled"
       },
       "manual_enabled": {
-        "name": "Manual supplement enabled"
+        "name": "Manual supplement option enabled"
       },
       "manual_pending": {
-        "name": "Command awaiting verification"
+        "name": "Manual command needs verification"
       }
     },
     "number": {
       "target_setting": {
-        "name": "Daily target setting"
+        "name": "Distribution target (g)"
       },
       "reference_setting": {
-        "name": "Reference weight setting"
+        "name": "Reference weight (g/portion)"
       },
       "threshold_setting": {
-        "name": "Bowl threshold setting"
+        "name": "Bowl threshold (g)"
       },
       "max_setting": {
-        "name": "Maximum portions setting"
+        "name": "Maximum simulated portions"
       }
     },
     "button": {
       "feed_one": {
-        "name": "Dispense one portion (supplement)"
+        "name": "Dispense one extra portion"
       },
       "reset_calibration": {
         "name": "Reset calibration"
       },
       "acknowledge_manual": {
-        "name": "Unlock after physical verification"
+        "name": "Confirm physical verification"
       }
     }
   }

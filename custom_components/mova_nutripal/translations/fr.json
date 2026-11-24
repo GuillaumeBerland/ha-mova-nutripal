@@ -44,22 +44,22 @@
         "name": "Poids dans le bol"
       },
       "configured_weight": {
-        "name": "Poids configuré par portion"
+        "name": "Poids nominal MOVA par portion"
       },
       "calibration_weight": {
-        "name": "Poids de référence par portion"
+        "name": "Poids utilisé par portion"
       },
       "estimated_distributed": {
-        "name": "Distribution estimée aujourd’hui"
+        "name": "Croquettes distribuées (estimation)"
       },
       "forecast": {
-        "name": "Distribution totale prévisionnelle"
+        "name": "Distribution prévue aujourd’hui"
       },
       "budget": {
-        "name": "Budget complémentaire estimé"
+        "name": "Budget de croquettes supplémentaire"
       },
       "target": {
-        "name": "Objectif journalier"
+        "name": "Objectif de distribution quotidien"
       },
       "meals_today": {
         "name": "Prises alimentaires aujourd’hui"
@@ -74,28 +74,28 @@
         "name": "Portions distribuées hier"
       },
       "supplement_remaining": {
-        "name": "Portions de compléments restantes"
+        "name": "Stock de compléments (valeur MOVA)"
       },
       "remaining_portions": {
-        "name": "Portions autonomes restantes"
+        "name": "Portions programmées restantes aujourd’hui"
       },
       "suggested_portions": {
         "name": "Complément simulé en portions"
       },
       "device_status": {
-        "name": "État appareil"
+        "name": "Code état appareil"
       },
       "warning_mask": {
-        "name": "Masque alertes"
+        "name": "Code alertes (masque)"
       },
       "fault_mask": {
-        "name": "Masque défauts"
+        "name": "Code défauts (masque)"
       },
       "feeding_mode": {
-        "name": "Mode de distribution"
+        "name": "Code mode de distribution"
       },
       "sd_card_status": {
-        "name": "État carte SD"
+        "name": "Code état carte SD"
       },
       "decision": {
         "name": "Décision simulée",
@@ -103,7 +103,7 @@
           "unavailable": "Données indisponibles",
           "schedule_uncertain": "Programme incertain",
           "device_not_ready": "Appareil non prêt",
-          "budget_reached": "Budget atteint",
+          "budget_reached": "Budget insuffisant pour une portion",
           "meal_soon": "Repas autonome imminent",
           "bowl_not_empty": "Bol suffisamment rempli",
           "would_feed": "Complément possible (simulation)"
@@ -116,10 +116,10 @@
         "name": "Durée de vie du dessiccant"
       },
       "measured_weight": {
-        "name": "Poids moyen calibré"
+        "name": "Poids médian calibré par portion"
       },
       "calibration_samples": {
-        "name": "Mesures de calibration"
+        "name": "Mesures de calibration valides"
       },
       "status_text": {
         "name": "État de la gamelle",
@@ -134,9 +134,9 @@
         }
       },
       "manual_state": {
-        "name": "Autorisation du complément manuel",
+        "name": "Disponibilité du complément manuel",
         "state": {
-          "disabled": "Désactivé",
+          "disabled": "Désactivé dans les réglages",
           "pending": "Commande à vérifier",
           "cooldown": "Délai de sécurité",
           "blocked": "Conditions non réunies",
@@ -144,7 +144,7 @@
         }
       },
       "manual_result": {
-        "name": "Résultat de la dernière commande",
+        "name": "Dernière commande manuelle",
         "state": {
           "none": "Aucune commande",
           "pending": "En attente",
@@ -152,6 +152,12 @@
           "uncertain": "Résultat incertain",
           "acknowledged": "Vérifié manuellement"
         }
+      },
+      "next_meal": {
+        "name": "Prochain repas programmé"
+      },
+      "next_meal_portions": {
+        "name": "Portions du prochain repas"
       }
     },
     "binary_sensor": {
@@ -168,7 +174,7 @@
         "name": "Caméra activée"
       },
       "simulation": {
-        "name": "Mode simulation"
+        "name": "Régulation en simulation"
       },
       "has_warning": {
         "name": "Alerte active"
@@ -177,38 +183,38 @@
         "name": "Défaut actif"
       },
       "calibration_enabled": {
-        "name": "Calibration passive"
+        "name": "Calibration passive activée"
       },
       "manual_enabled": {
-        "name": "Complément manuel autorisé"
+        "name": "Option complément manuel activée"
       },
       "manual_pending": {
-        "name": "Commande à vérifier"
+        "name": "Commande manuelle à vérifier"
       }
     },
     "number": {
       "target_setting": {
-        "name": "Réglage objectif journalier"
+        "name": "Objectif de distribution (g)"
       },
       "reference_setting": {
-        "name": "Réglage poids de référence"
+        "name": "Poids de référence (g/portion)"
       },
       "threshold_setting": {
-        "name": "Réglage seuil du bol"
+        "name": "Seuil du bol (g)"
       },
       "max_setting": {
-        "name": "Réglage maximum de portions"
+        "name": "Maximum de portions simulées"
       }
     },
     "button": {
       "feed_one": {
-        "name": "Distribuer une portion (complément)"
+        "name": "Distribuer une portion supplémentaire"
       },
       "reset_calibration": {
         "name": "Réinitialiser la calibration"
       },
       "acknowledge_manual": {
-        "name": "Déverrouiller après vérification physique"
+        "name": "Confirmer la vérification physique"
       }
     }
   }

@@ -14,6 +14,9 @@ Keep an adequate independent feeding plan, verify that scheduled feeding works w
 ## Installation (HACS)
 After a GitHub release is published, open HACS > Custom repositories and add `https://github.com/GuillaumeBerland/ha-mova-nutripal` as an Integration. Download a release, restart Home Assistant and add MOVA NutriPal in Settings > Devices & services. Existing users: back up HA, update the existing component and restart; do not remove the config entry or stored calibration. Keep manual dispensing disabled until verified. Do not bypass a command lock without checking the feeder physically.
 
+## Dashboard
+A native, read-only dashboard card is available. See [dashboard instructions](dashboard/README.md) to generate it with your actual entity IDs (French or English). No extra frontend plugin is required.
+
 ## Development
 Before the first publication, run `bash prepare.sh` using the existing local upstream clone (optionally supply its path). It exports the three pinned transport files and the original license. They must be committed; HACS users do not run the script. Run `python3 -m unittest discover -s tests -v`. Tests do not connect to MOVA or dispense food. HACS and live HA validation remain separate checks.
 

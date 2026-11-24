@@ -1,4 +1,4 @@
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
 from .const import DOMAIN
 from .entity import NutriPalEntity
 
@@ -7,6 +7,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([NutriPalBinary(coordinator, key) for key in ("online", "battery_present", "child_lock", "camera_enabled", "simulation", "has_warning", "has_fault", "calibration_enabled", "manual_enabled", "manual_pending")])
 
 class NutriPalBinary(NutriPalEntity, BinarySensorEntity):
+    def __init__(self, coordinator, key):
+        super().__init__(coordinator, key)
+        if key == 'online':
+            self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+        elif key in ('has_warning', 'has_fault', 'manual_pending'):
+            self._attr_device_class = BinarySensorDeviceClass.PROBLEM
+
     @property
     def is_on(self):
         value = self.coordinator.data.get(self.key)
