@@ -1,5 +1,9 @@
 from homeassistant.components.sensor import SensorEntity, SensorStateClass, SensorDeviceClass
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers import entity_platform, config_validation as cv
+from homeassistant.exceptions import HomeAssistantError
+import voluptuous as vol
+from math import isfinite
 from .const import DOMAIN
 from .entity import NutriPalEntity
 
@@ -11,6 +15,27 @@ DIAGNOSTIC = {"device_status", "warning_mask", "fault_mask", "feeding_mode", "sd
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([NutriPalSensor(coordinator, key) for key in GRAMS + COUNTS + OTHER])
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        'add_calibration_measurement', {
+            vol.Required('measurement_date'): cv.date,
+            vol.Required('portions'): vol.All(_whole_number, vol.Range(min=1, max=100)),
+            vol.Required('daily_counter'): vol.All(_whole_number, vol.Range(min=1, max=10000)),
+            vol.Required('weight_before'): vol.All(_weight, vol.Range(min=0, max=10000)),
+            vol.Required('weight_after'): vol.All(_weight, vol.Range(min=0, max=10000)),
+            vol.Required('confirmed'): cv.boolean,
+        }, 'async_add_calibration_measurement')
+
+
+def _whole_number(value):
+    if type(value) not in (int, float) or not isfinite(value) or value != int(value):
+        raise vol.Invalid('Expected a whole number')
+    return int(value)
+
+
+def _weight(value):
+    if type(value) not in (int, float) or not isfinite(value):
+        raise vol.Invalid('Expected a finite weight in grams')
+    return float(value)
 
 class NutriPalSensor(NutriPalEntity, SensorEntity):
     def __init__(self, coordinator, key):
@@ -42,12 +67,23 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
         if key in ("intake_today", "bowl_weight", "estimated_distributed", "forecast", "budget", "battery", "portions_today", "meals_today"):
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
+    async def async_add_calibration_measurement(self, **kwargs):
+        if self.key != 'calibration_samples':
+            raise HomeAssistantError('Select the valid calibration samples sensor')
+        await self.coordinator.async_add_calibration_measurement(**kwargs)
+
     @property
     def native_value(self):
         return self.coordinator.data.get(self.key)
 
     @property
     def extra_state_attributes(self):
+        if self.key == "calibration_samples":
+            history = self.coordinator.data.get('calibration_history', [])
+            return {'assisted_samples': sum(row['source'] == 'assisted' for row in history),
+                    'passive_samples': sum(row['source'] == 'passive' for row in history),
+                    'legacy_samples': sum(row['source'] == 'legacy' for row in history),
+                    'samples': history}
         if self.key == "remaining_portions":
             return {"schedule": self.coordinator.data.get("schedule")}
         if self.key == "decision":

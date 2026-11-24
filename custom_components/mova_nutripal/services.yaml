@@ -1,0 +1,48 @@
+add_calibration_measurement:
+  target:
+    entity:
+      integration: mova_nutripal
+      domain: sensor
+  fields:
+    measurement_date:
+      required: true
+      selector:
+        date:
+    portions:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: box
+    daily_counter:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 10000
+          step: 1
+          mode: box
+    weight_before:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.1
+          unit_of_measurement: g
+          mode: box
+    weight_after:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.1
+          unit_of_measurement: g
+          mode: box
+    confirmed:
+      required: true
+      selector:
+        boolean:

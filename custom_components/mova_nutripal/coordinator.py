@@ -4,7 +4,8 @@ import asyncio
 import logging
 from homeassistant.exceptions import HomeAssistantError
 from copy import deepcopy
-from .state_store import load_state, save_state
+from .state_store import (load_state, save_state, append_sample, assisted_measurement,
+                          calibration_history)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from .const import DEFAULTS, DOMAIN
 from .planner import plan
@@ -50,6 +51,7 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         samples = self.state['samples']
         weight = effective_weight(samples, options['portion_weight'], options['auto_calibration'])
         data.update(plan(data, {**options, 'portion_weight': weight}, now))
+        data['calibration_history'] = calibration_history(self.state)
         data.update(target=options['target'], calibration_weight=weight, simulation=True,
                     calibration_samples=len(samples), measured_weight=effective_weight(samples, None) if len(samples)>=3 else None,
                     calibration_enabled=options['auto_calibration'], manual_enabled=options['manual_enabled'],
@@ -105,10 +107,12 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                 fast = near_meal(data, now) or (pending is not None and now.timestamp()-pending.get('time',0) <= 240) or self.cal.candidate is not None
                 self.update_interval = timedelta(seconds=30) if fast else timedelta(minutes=5)
                 if options['auto_calibration'] and fast:
+                    baseline = self.cal.baseline
                     sample = self.cal.observe(data, now)
-                    if sample is not None:
-                        self.state['samples'] = (self.state['samples'] + [sample])[-15:]
-                        changed = True
+                    if sample is not None and baseline is not None:
+                        detail = {'source': 'passive', 'day': now.date().isoformat(),
+                                  'start_count': baseline[2], 'end_count': data['portions_today']}
+                        changed = append_sample(self.state, sample, detail) or changed
                 else:
                     self.cal.reset()
                 if changed:
@@ -158,10 +162,39 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         if not ack:
             raise HomeAssistantError('MOVA: uncertain command; check feeder before unlocking')
 
+    async def async_add_calibration_measurement(self, measurement_date, portions,
+                                               daily_counter, weight_before,
+                                               weight_after, confirmed):
+        """Record one verified weighing; never dispense or alter the program."""
+        async with self.lock:
+            if self.stopping or self.storage_failed or not self.hass.is_running:
+                raise HomeAssistantError('Calibration storage unavailable')
+            if self.state['pending'] is not None or self.options['manual_enabled']:
+                raise HomeAssistantError('Disable manual dispensing and resolve any pending command first')
+            try:
+                value, detail = assisted_measurement(
+                    measurement_date, datetime.now(TZ).date(), portions, daily_counter,
+                    weight_before, weight_after, confirmed)
+            except ValueError as exc:
+                raise HomeAssistantError(str(exc)) from None
+            previous = deepcopy(self.state)
+            if not append_sample(self.state, value, detail):
+                raise HomeAssistantError('This dispensing event overlaps an existing calibration sample')
+            try:
+                await self._save()
+            except Exception:
+                self.state = previous
+                raise HomeAssistantError('Could not save calibration measurement') from None
+            self.cal.reset()
+        # A normal refresh publishes the new median using current device data.
+        # No dispensing command is issued by this action.
+        await self.async_request_refresh()
+
     async def async_reset_calibration(self):
         async with self.lock:
             self.cal.reset()
             self.state['samples'] = []
+            self.state['sample_details'] = []
             await self._save()
         await self.async_request_refresh()
 

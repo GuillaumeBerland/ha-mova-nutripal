@@ -223,5 +223,37 @@
         "name": "Scheduled meals"
       }
     }
+  },
+  "services": {
+    "add_calibration_measurement": {
+      "name": "Record calibration measurement",
+      "description": "Select only the valid calibration samples sensor. Records a verified weighing without dispensing food.",
+      "fields": {
+        "measurement_date": {
+          "name": "Measurement date",
+          "description": "MOVA local date (Europe/Paris), within the last 30 days."
+        },
+        "portions": {
+          "name": "Dispensed portions",
+          "description": "Number actually dispensed during the weighing."
+        },
+        "daily_counter": {
+          "name": "Daily counter after meal",
+          "description": "Total portions dispensed that day, immediately after this meal."
+        },
+        "weight_before": {
+          "name": "Weight before dispensing",
+          "description": "Kibble weight before the meal, in grams, excluding the bowl."
+        },
+        "weight_after": {
+          "name": "Weight after dispensing",
+          "description": "Kibble weight immediately after dispensing, before eating."
+        },
+        "confirmed": {
+          "name": "Verified weighing",
+          "description": "Confirm no food was eaten, added or removed between weighings."
+        }
+      }
+    }
   }
 }

@@ -223,5 +223,37 @@
         "name": "Repas programmés"
       }
     }
+  },
+  "services": {
+    "add_calibration_measurement": {
+      "name": "Enregistrer une mesure de calibration",
+      "description": "Sélectionner uniquement le capteur Mesures de calibration valides. Enregistre une pesée vérifiée sans distribuer de croquettes.",
+      "fields": {
+        "measurement_date": {
+          "name": "Date de la pesée",
+          "description": "Jour local MOVA (Europe/Paris), au maximum 30 jours auparavant."
+        },
+        "portions": {
+          "name": "Portions distribuées",
+          "description": "Nombre réellement distribué pendant la pesée."
+        },
+        "daily_counter": {
+          "name": "Compteur journalier après le repas",
+          "description": "Total des portions distribuées ce jour, juste après ce repas."
+        },
+        "weight_before": {
+          "name": "Poids avant distribution",
+          "description": "Poids des croquettes présentes avant le repas, en grammes, sans tare."
+        },
+        "weight_after": {
+          "name": "Poids après distribution",
+          "description": "Poids des croquettes immédiatement après le repas, avant consommation."
+        },
+        "confirmed": {
+          "name": "Pesée vérifiée",
+          "description": "Confirmer que les chats n’ont pas mangé et qu’aucune croquette n’a été ajoutée ou retirée entre les pesées."
+        }
+      }
+    }
   }
 }
