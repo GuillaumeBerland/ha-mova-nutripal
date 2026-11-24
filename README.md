@@ -1,5 +1,10 @@
 # MOVA NutriPal for Home Assistant
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="custom_components/mova_nutripal/brand/dark_logo@2x.png">
+  <img src="custom_components/mova_nutripal/brand/logo@2x.png" alt="MOVA NutriPal — community integration" width="380">
+</picture>
+
 **Experimental — unofficial community integration.** Tested device model: `mova.feeder.q2503` (NutriPal 10 Ultra). EU MOVA cloud; currently uses Europe/Paris for feeding dates. The 0.1.0 read-only version was tested in Home Assistant Core 2026.11.2. The 0.2.x release still requires live validation. No affiliation with MOVA or Dreame.
 
 ## Features
@@ -15,7 +20,7 @@ Keep an adequate independent feeding plan, verify that scheduled feeding works w
 After a GitHub release is published, open HACS > Custom repositories and add `https://github.com/GuillaumeBerland/ha-mova-nutripal` as an Integration. Download a release, restart Home Assistant and add MOVA NutriPal in Settings > Devices & services. Existing users: back up HA, update the existing component and restart; do not remove the config entry or stored calibration. Keep manual dispensing disabled until verified. Do not bypass a command lock without checking the feeder physically.
 
 ## Dashboard
-A native, read-only dashboard card is available. See [dashboard instructions](dashboard/README.md) to generate it with your actual entity IDs (French or English). No extra frontend plugin is required.
+A native, read-only dashboard is available in a responsive Sections layout or as a single card. See [dashboard instructions](dashboard/README.md) to generate it with your actual entity IDs (French or English). The optional camera opens on demand; no extra frontend plugin or global theme is required.
 
 ## Development
 Before the first publication, run `bash prepare.sh` using the existing local upstream clone (optionally supply its path). It exports the three pinned transport files and the original license. They must be committed; HACS users do not run the script. Run `python3 -m unittest discover -s tests -v`. Tests do not connect to MOVA or dispense food. HACS and live HA validation remain separate checks.
