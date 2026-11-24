@@ -1,0 +1,225 @@
+{
+  "entity": {
+    "sensor": {
+      "intake_today": {
+        "default": "mdi:food-drumstick"
+      },
+      "intake_yesterday": {
+        "default": "mdi:history"
+      },
+      "bowl_weight": {
+        "default": "mdi:bowl-mix-outline"
+      },
+      "configured_weight": {
+        "default": "mdi:scale"
+      },
+      "calibration_weight": {
+        "default": "mdi:scale-balance"
+      },
+      "estimated_distributed": {
+        "default": "mdi:bowl-mix"
+      },
+      "forecast": {
+        "default": "mdi:chart-line"
+      },
+      "budget": {
+        "default": "mdi:food-apple-outline"
+      },
+      "target": {
+        "default": "mdi:target"
+      },
+      "measured_weight": {
+        "default": "mdi:scale-balance"
+      },
+      "meals_today": {
+        "default": "mdi:counter"
+      },
+      "meals_yesterday": {
+        "default": "mdi:history"
+      },
+      "portions_today": {
+        "default": "mdi:counter"
+      },
+      "portions_yesterday": {
+        "default": "mdi:history"
+      },
+      "supplement_remaining": {
+        "default": "mdi:pill"
+      },
+      "remaining_portions": {
+        "default": "mdi:calendar-clock"
+      },
+      "suggested_portions": {
+        "default": "mdi:plus-circle-outline"
+      },
+      "calibration_samples": {
+        "default": "mdi:chart-bar"
+      },
+      "device_status": {
+        "default": "mdi:information-outline"
+      },
+      "warning_mask": {
+        "default": "mdi:alert-outline"
+      },
+      "fault_mask": {
+        "default": "mdi:alert-octagon-outline"
+      },
+      "feeding_mode": {
+        "default": "mdi:cog-outline"
+      },
+      "sd_card_status": {
+        "default": "mdi:sd"
+      },
+      "desiccant_days": {
+        "default": "mdi:timer-sand"
+      },
+      "next_meal": {
+        "default": "mdi:calendar-clock"
+      },
+      "next_meal_portions": {
+        "default": "mdi:bowl-mix-outline"
+      },
+      "decision": {
+        "default": "mdi:robot-outline",
+        "state": {
+          "unavailable": "mdi:help-circle-outline",
+          "schedule_uncertain": "mdi:calendar-question",
+          "device_not_ready": "mdi:alert-circle-outline",
+          "budget_reached": "mdi:target",
+          "meal_soon": "mdi:calendar-clock",
+          "bowl_not_empty": "mdi:bowl-mix-outline",
+          "would_feed": "mdi:plus-circle-outline"
+        }
+      },
+      "status_text": {
+        "default": "mdi:help-circle-outline",
+        "state": {
+          "idle": "mdi:sleep",
+          "feeding": "mdi:bowl-mix",
+          "supplements": "mdi:pill",
+          "fault": "mdi:alert-octagon",
+          "food_fault": "mdi:alert-circle",
+          "supplement_fault": "mdi:alert-circle",
+          "unknown": "mdi:help-circle-outline"
+        }
+      },
+      "manual_state": {
+        "default": "mdi:help-circle-outline",
+        "state": {
+          "disabled": "mdi:lock-outline",
+          "pending": "mdi:clock-alert-outline",
+          "cooldown": "mdi:timer-sand",
+          "blocked": "mdi:cancel",
+          "ready": "mdi:check-circle-outline"
+        }
+      },
+      "manual_result": {
+        "default": "mdi:help-circle-outline",
+        "state": {
+          "none": "mdi:minus-circle-outline",
+          "pending": "mdi:clock-outline",
+          "confirmed": "mdi:check-circle",
+          "uncertain": "mdi:alert-circle-outline",
+          "acknowledged": "mdi:check-decagram-outline"
+        }
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "default": "mdi:help-circle-outline",
+        "state": {
+          "on": "mdi:wifi",
+          "off": "mdi:wifi-off"
+        }
+      },
+      "battery_present": {
+        "default": "mdi:battery-unknown",
+        "state": {
+          "on": "mdi:battery",
+          "off": "mdi:battery-off-outline"
+        }
+      },
+      "child_lock": {
+        "default": "mdi:lock-outline",
+        "state": {
+          "on": "mdi:lock",
+          "off": "mdi:lock-open-outline"
+        }
+      },
+      "camera_enabled": {
+        "default": "mdi:cctv",
+        "state": {
+          "on": "mdi:cctv",
+          "off": "mdi:cctv-off"
+        }
+      },
+      "simulation": {
+        "default": "mdi:flask-outline",
+        "state": {
+          "on": "mdi:flask",
+          "off": "mdi:flask-outline"
+        }
+      },
+      "has_warning": {
+        "default": "mdi:help-circle-outline",
+        "state": {
+          "on": "mdi:alert",
+          "off": "mdi:check-circle-outline"
+        }
+      },
+      "has_fault": {
+        "default": "mdi:help-circle-outline",
+        "state": {
+          "on": "mdi:alert-octagon",
+          "off": "mdi:shield-check-outline"
+        }
+      },
+      "calibration_enabled": {
+        "default": "mdi:scale-balance",
+        "state": {
+          "on": "mdi:scale-balance",
+          "off": "mdi:pause-circle-outline"
+        }
+      },
+      "manual_enabled": {
+        "default": "mdi:lock-outline",
+        "state": {
+          "on": "mdi:lock-open-outline",
+          "off": "mdi:lock-outline"
+        }
+      },
+      "manual_pending": {
+        "default": "mdi:help-circle-outline",
+        "state": {
+          "on": "mdi:alert-circle",
+          "off": "mdi:check-circle-outline"
+        }
+      }
+    },
+    "number": {
+      "target_setting": {
+        "default": "mdi:target"
+      },
+      "reference_setting": {
+        "default": "mdi:scale"
+      },
+      "threshold_setting": {
+        "default": "mdi:bowl-mix-outline"
+      },
+      "max_setting": {
+        "default": "mdi:counter"
+      }
+    },
+    "button": {
+      "feed_one": {
+        "default": "mdi:bowl-mix"
+      },
+      "reset_calibration": {
+        "default": "mdi:restart"
+      },
+      "acknowledge_manual": {
+        "default": "mdi:check-decagram-outline"
+      }
+    }
+  }
+}

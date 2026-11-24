@@ -26,6 +26,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class NutriPalCamera(Camera):
     _attr_has_entity_name = True
     _attr_name = "Camera"
+    _attr_icon = "mdi:cctv"
     _attr_entity_registry_enabled_default = False
     _attr_supported_features = CameraEntityFeature.STREAM
 
