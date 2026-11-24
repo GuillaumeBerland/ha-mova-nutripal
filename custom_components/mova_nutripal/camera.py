@@ -11,7 +11,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from .const import DOMAIN
 from .video import open_video_session, snapshot
 from .live_relay import LiveRelay
-from .cloud_video import VideoAuthorizationCache, VideoError
+from .cloud_video import VideoAuthorizationCache, VideoCancelled, VideoError
 
 _LOGGER = logging.getLogger(__name__)
 SNAPSHOT_GRACE = 0.75
@@ -102,13 +102,23 @@ class NutriPalCamera(Camera):
             return await self._live_image()
         try:
             image = await self.hass.async_add_executor_job(
-                self._relay.capture, partial(snapshot, *self._video_args,
-                                             authorization_cache=self._authorization_cache))
+                partial(self._relay.capture,
+                        partial(snapshot, *self._video_args,
+                                authorization_cache=self._authorization_cache),
+                        cancellable=True))
             if self.available and self.hass.is_running:
                 self._last_image = image
                 return image
             return None
+        except VideoCancelled:
+            # The executor has finished cleaning up before returning. HA can
+            # now supply the poster from the live reader rather than a new session.
+            if self.available and self._live_requested():
+                return await self._live_image()
+            return None
         except VideoError as exc:
+            if str(exc) == "video_busy" and self.available and self._live_requested():
+                return await self._live_image()
             _LOGGER.warning("NutriPal camera capture failed (%s)", str(exc))
             return None
         except Exception:

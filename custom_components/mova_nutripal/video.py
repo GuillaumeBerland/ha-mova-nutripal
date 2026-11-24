@@ -11,7 +11,7 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 
-from .cloud_video import VideoError, provision
+from .cloud_video import VideoCancelled, VideoError, provision
 from .flv import convert_stream
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,8 +25,14 @@ def _local_target(stream_url):
     return url.hostname, url.port or 80, (url.path or "/") + ("?" + url.query if url.query else "")
 
 
-def capture_jpeg(stream_url, ffmpeg, *, seconds=35):
+def _check_cancelled(stopped):
+    if stopped is not None and stopped.is_set():
+        raise VideoCancelled("snapshot_cancelled")
+
+
+def capture_jpeg(stream_url, ffmpeg, *, seconds=35, stopped=None):
     """Convert in memory and extract one frame; terminate FFmpeg on failure."""
+    _check_cancelled(stopped)
     host, port, target = _local_target(stream_url)
     connection = http.client.HTTPConnection(host, port, timeout=8)
     process = None
@@ -36,15 +42,18 @@ def capture_jpeg(stream_url, ffmpeg, *, seconds=35):
         try:
             connection.request("GET", target)
             response = connection.getresponse()
+            _check_cancelled(stopped)
             if response.status != 200:
                 raise VideoError("video_http_status")
 
             def read_exact(size):
                 data = bytearray()
                 while len(data) < size:
+                    _check_cancelled(stopped)
                     if time.monotonic() >= deadline:
                         raise TimeoutError()
                     chunk = response.read1(size - len(data))
+                    _check_cancelled(stopped)
                     if not chunk:
                         raise EOFError()
                     data.extend(chunk)
@@ -60,10 +69,12 @@ def capture_jpeg(stream_url, ffmpeg, *, seconds=35):
             os.set_blocking(fd, False)
             try:
                 for packet in convert_stream(read_exact):
+                    _check_cancelled(stopped)
                     if process.poll() is not None:
                         break
                     remaining = memoryview(packet)
                     while remaining:
+                        _check_cancelled(stopped)
                         if time.monotonic() >= deadline:
                             raise TimeoutError()
                         if process.poll() is not None:
@@ -82,11 +93,20 @@ def capture_jpeg(stream_url, ffmpeg, *, seconds=35):
                     process.stdin.close()
                 except OSError:
                     pass
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
+                # Flush normally, but do not spend ten seconds waiting for a
+                # discarded JPEG. The native session is closed by its owner.
+                flush_deadline = time.monotonic() + 10
+                while process.poll() is None:
+                    if ((stopped is not None and stopped.is_set())
+                            or time.monotonic() >= flush_deadline):
+                        process.kill()
+                        process.wait()
+                        break
+                    try:
+                        process.wait(timeout=0.2)
+                    except subprocess.TimeoutExpired:
+                        continue
+        _check_cancelled(stopped)
         if process is None or process.returncode != 0 or not destination.is_file():
             raise VideoError("jpeg_capture_failed")
         if destination.stat().st_size > 8 * 1024 * 1024:
@@ -98,7 +118,7 @@ def capture_jpeg(stream_url, ffmpeg, *, seconds=35):
 
 
 @contextmanager
-def open_video_session(username, password, did, runtime_path, *, authorization_cache=None):
+def open_video_session(username, password, did, runtime_path, *, authorization_cache=None, stopped=None):
     """Open one authorized video session and always close it on exit."""
     from .api import NutriPalAPI
     from .const import MODEL
@@ -110,6 +130,7 @@ def open_video_session(username, password, did, runtime_path, *, authorization_c
     runtime = None
     session = None
     try:
+        _check_cancelled(stopped)
         from .xp2p.models import DreameLawnMowerCameraStreamRuntimeInputs
         from .xp2p.xp2p_host_runtime import DreameLawnMowerXp2pHostRuntime
         from .xp2p.xp2p_runtime_bootstrap import ensure_xp2p_host_runtime
@@ -120,12 +141,14 @@ def open_video_session(username, password, did, runtime_path, *, authorization_c
         if not (assets.startup_probe or {}).get("ready"):
             raise VideoError("runtime_probe_failed")
         _LOGGER.debug("NutriPal video runtime ready in %.1f s", time.monotonic() - mark)
+        _check_cancelled(stopped)
         mark = time.monotonic()
         stage = "video_login"
         api = NutriPalAPI(username, password)
         api.discover(did)
         # Honor the device's own camera switch; never enable it ourselves.
         _LOGGER.debug("NutriPal video login/discovery in %.1f s", time.monotonic() - mark)
+        _check_cancelled(stopped)
         check_started = time.monotonic()
         stage = "camera_switch"
         result = api.cloud.send("get_properties", [{"did": str(did), "siid": 1000, "piid": 1}], retry_count=0, timeout=15)
@@ -135,6 +158,7 @@ def open_video_session(username, password, did, runtime_path, *, authorization_c
         ):
             raise VideoError("camera_off_or_unknown")
         _LOGGER.debug("NutriPal camera switch check in %.1f s", time.monotonic() - check_started)
+        _check_cancelled(stopped)
         stage = "video_provision"
         provision_started = time.monotonic()
         if authorization_cache is None:
@@ -145,6 +169,7 @@ def open_video_session(username, password, did, runtime_path, *, authorization_c
                       "cache hit" if reused else "fresh", time.monotonic() - provision_started)
         api.close()
         api = None
+        _check_cancelled(stopped)
         inputs = DreameLawnMowerCameraStreamRuntimeInputs(
             source="mova_nutripal", did=str(did), channel_id=identity.device_id,
             product_id=identity.product_id, device_name=identity.device_name,
@@ -161,9 +186,13 @@ def open_video_session(username, password, did, runtime_path, *, authorization_c
             delegate_attempts=20, delegate_retry_interval=0.5)
         _LOGGER.debug("NutriPal XP2P ready in %.1f s (total %.1f s)",
                       time.monotonic() - mark, time.monotonic() - started)
+        _check_cancelled(stopped)
         stage = "video_consumer"
         _local_target(session.stream_url)
         yield session.stream_url
+    except VideoCancelled:
+        # An intentional handoff preserves a still-valid authorization.
+        raise
     except VideoError:
         if authorization_cache is not None:
             authorization_cache.clear()
@@ -196,22 +225,28 @@ def open_video_session(username, password, did, runtime_path, *, authorization_c
                 raise VideoError("video_cloud_cleanup") from None
 
 
-def snapshot(username, password, did, runtime_path, *, authorization_cache=None):
+def snapshot(username, password, did, runtime_path, *, authorization_cache=None, stopped=None):
     """Keep the independent still-image path when live playback is not active."""
+    _check_cancelled(stopped)
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise VideoError("ffmpeg_missing")
     with open_video_session(username, password, did, runtime_path,
-                            authorization_cache=authorization_cache) as url:
+                            authorization_cache=authorization_cache, stopped=stopped) as url:
         started = time.monotonic()
         try:
-            return capture_jpeg(url, ffmpeg)
+            image = capture_jpeg(url, ffmpeg, stopped=stopped)
+            _check_cancelled(stopped)
+            return image
         except VideoError:
             raise
+        except TimeoutError:
+            _check_cancelled(stopped)
+            raise VideoError("jpeg_capture") from None
         except Exception:
             raise VideoError("jpeg_capture") from None
         finally:
-            _LOGGER.debug("NutriPal JPEG capture completed in %.1f s", time.monotonic() - started)
+            _LOGGER.debug("NutriPal JPEG capture ended in %.1f s", time.monotonic() - started)
 
 
 def iter_enhanced_flv(stream_url, stopped):

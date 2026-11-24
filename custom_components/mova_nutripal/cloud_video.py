@@ -8,6 +8,10 @@ class VideoError(RuntimeError):
     """Camera error containing only a safe diagnostic stage."""
 
 
+class VideoCancelled(VideoError):
+    """Expected interruption of a still capture; not a device failure."""
+
+
 @dataclass(frozen=True, repr=False)
 class VideoIdentity:
     device_id: str

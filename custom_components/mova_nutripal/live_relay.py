@@ -6,7 +6,7 @@ import secrets
 from threading import Event, Lock, Thread
 from time import monotonic
 
-from .cloud_video import VideoError
+from .cloud_video import VideoCancelled, VideoError
 from .video import iter_enhanced_flv
 from .transcode import iter_h264_flv
 
@@ -47,6 +47,7 @@ class LiveRelay:
     def __init__(self, session_factory, codec="hevc", *, invalidate_authorization=None):
         self._codec = codec
         self._retry_after = 0.0
+        self._cleanup_failed = False
         self._session_factory = session_factory
         self._invalidate_authorization = invalidate_authorization
         self._path = "/" + secrets.token_urlsafe(24) + "/live.flv"
@@ -54,6 +55,7 @@ class LiveRelay:
         self._gate = Lock()
         self._active = Event()
         self._stopped = None
+        self._snapshot_stop = None
         self._enabled = False
         self._closed = False
         self._server = None
@@ -67,6 +69,8 @@ class LiveRelay:
         with self._state:
             self._enabled = bool(enabled) and not self._closed
             if not self._enabled:
+                if self._snapshot_stop is not None:
+                    self._snapshot_stop.set()
                 if self._stopped is not None:
                     self._stopped.set()
                 if self._invalidate_authorization is not None:
@@ -75,7 +79,7 @@ class LiveRelay:
     def start(self):
         """Bind only the loopback interface; no device requests here."""
         with self._state:
-            if self._closed or not self._enabled:
+            if self._closed or not self._enabled or self._cleanup_failed:
                 return None
             if self._server is None:
                 server = _Server(("127.0.0.1", 0), _Handler)
@@ -98,28 +102,44 @@ class LiveRelay:
                 if self._stopped is not None:
                     self._stopped.set()
 
-    def _backoff(self):
+    def _backoff(self, exc=None):
         with self._state:
+            # If native cleanup failed, do not start another session until
+            # the integration is reloaded. A cooldown alone cannot prove it closed.
+            if isinstance(exc, VideoError) and str(exc) == "xp2p_cleanup":
+                self._cleanup_failed = True
             self._retry_after = monotonic() + FAILURE_BACKOFF
             if self._invalidate_authorization is not None:
                 self._invalidate_authorization()
 
-    def capture(self, fn):
+    def capture(self, fn, *, cancellable=False):
         """Do not start a snapshot while a live reader is waiting or active."""
         with self._state:
+            if self._cleanup_failed:
+                raise VideoError("xp2p_cleanup")
             if not self._enabled or self._closed:
                 raise VideoError("camera_off_or_unknown")
             if monotonic() < self._retry_after:
                 raise VideoError("video_backoff")
             if self._active.is_set() or not self._gate.acquire(blocking=False):
                 raise VideoError("video_busy")
+            stopped = Event()
+            self._snapshot_stop = stopped
         try:
-            return fn()
-        except Exception:
-            self._backoff()
+            image = fn(stopped=stopped) if cancellable else fn()
+            if cancellable and stopped.is_set():
+                raise VideoCancelled("snapshot_cancelled")
+            return image
+        except VideoCancelled:
+            _LOGGER.debug("NutriPal snapshot cancelled; cleanup complete")
+            raise
+        except Exception as exc:
+            self._backoff(exc)
             raise
         finally:
-            self._gate.release()
+            with self._state:
+                self._snapshot_stop = None
+                self._gate.release()
 
     def serve(self, handler):
         if not secrets.compare_digest(handler.path, self._path):
@@ -127,7 +147,9 @@ class LiveRelay:
             return
         stopped = Event()
         with self._state:
-            if not self._enabled or self._closed:
+            if self._cleanup_failed:
+                refusal = "cleanup_failed"
+            elif not self._enabled or self._closed:
                 refusal = "disabled"
             elif monotonic() < self._retry_after:
                 refusal = "backoff"
@@ -137,6 +159,9 @@ class LiveRelay:
                 refusal = None
                 self._stopped = stopped
                 self._active.set()  # Reserve before waiting on an existing snapshot.
+                if self._snapshot_stop is not None:
+                    self._snapshot_stop.set()
+                    _LOGGER.debug("NutriPal live request preempts standalone snapshot")
         if refusal:
             _LOGGER.debug("NutriPal live request refused (%s)", refusal)
             handler.send_error(503)
@@ -151,7 +176,8 @@ class LiveRelay:
                 return
             _LOGGER.debug("NutriPal live gate acquired in %.1f s", monotonic() - request_started)
             with self._state:
-                enabled = (self._enabled and not self._closed and not stopped.is_set()
+                enabled = (self._enabled and not self._closed and not self._cleanup_failed
+                           and not stopped.is_set()
                            and monotonic() >= self._retry_after)
                 codec = self._codec
             if not enabled:
@@ -183,8 +209,8 @@ class LiveRelay:
                 self._backoff()
             _LOGGER.debug("NutriPal live stream ended or disconnected")
         except VideoError as exc:
-            if not stopped.is_set():
-                self._backoff()
+            if not stopped.is_set() or str(exc) == "xp2p_cleanup":
+                self._backoff(exc)
             _LOGGER.warning("NutriPal live stream failed (%s)", str(exc))
             if not started and not stopped.is_set():
                 try:
@@ -214,6 +240,8 @@ class LiveRelay:
         with self._state:
             self._closed = True
             self._enabled = False
+            if self._snapshot_stop is not None:
+                self._snapshot_stop.set()
             if self._invalidate_authorization is not None:
                 self._invalidate_authorization()
             if self._stopped is not None:
