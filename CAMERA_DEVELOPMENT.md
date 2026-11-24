@@ -27,3 +27,22 @@ Do not add an always-live dashboard until stable playback and the feeding coordi
 ## Alpha 3 — compatibility and shared backoff
 
 Default H.264 compatibility mode uses FFmpeg/libx264 on demand, 2 encoder threads, 30-frame GOP, AAC passthrough and rebased timestamps. H.265 native is available in integration options. Existing still capture remains unchanged. A live reader reserves its slot and waits up to 12 seconds for an already-running JPEG capture; further captures cannot take the gate. Native/provisioning errors trigger a shared 60-second video-only cooldown. HA can still retry the local URL during cooldown, but no new cloud request is made. An ordinary client disconnect does not trigger a cooldown. No changes to the feeding coordinator or feeding commands. Real HA OS encoding and HLS playback require testing. HD/SD selection is not implemented: both requested qualities produced 720x1280 HEVC in the lab. Keep preload off; disable the camera and restart or roll back if feeding updates fail.
+
+## Alpha 4 — on-demand startup optimization
+
+Each camera entity owns an in-memory authorization cache (no persisted tokens or tickets). A fresh authorization is reused for at most 60 seconds and never beyond the reported absolute `expireAt` minus five seconds. Unknown, relative, invalid or expired timestamps disable reuse. The Tencent P2P ticket's independent lifetime is not documented, so reuse is experimental. Login/discovery and the actual device camera-switch read still run for each session, including cache hits. Cache entries are scoped to device/model/account, invalidated on disable/unload and video failures; a failed native startup is not retried immediately, and the existing 60-second video cooldown remains. A new native session is still created on demand and always closed; no keepalive or background video connection is added.
+
+A standalone still request without a fresh cached image waits 0.75 seconds before opening XP2P. If a native reader or HA stream output becomes active, use HA's keyframe instead. Successful live keyframes are also eligible for the existing 30-second image cache. If a standalone capture has already started, the existing single-reader gate and bounded wait still apply. This is a best-effort optimization; HA does not identify poster requests separately from explicit snapshots. The camera entity and feeding interfaces are unchanged. H.264 encoding and AAC passthrough are unchanged.
+
+Debug logs split login/discovery, switch check, fresh/cached provisioning, XP2P negotiation and relay gate/startup timings without credentials or URLs. The time until a relay starts sending FLV is not the same as time until the browser displays its first frame. Compare cold and warm starts on HA OS, monitor feeding sensors, and check standalone `camera.snapshot` after the live session stops. The cache lifetime starts when the token is received, not when the viewer disconnects. A cache hit may be uncommon after a long live session.
+
+HA Core 2026.11.2 defaults to low-latency HLS (`ll_hls: true`), six-second segments and one-second parts. If buffering remains the bottleneck, an optional administrator-only comparison can use the following `configuration.yaml` settings (merge with an existing `stream:` section and restart HA):
+
+```yaml
+stream:
+  ll_hls: true
+  segment_duration: 2
+  part_duration: 0.5
+```
+
+This affects every HA camera, not just NutriPal, and may increase request frequency. It is not applied by the integration. Test after the baseline comparison, preferably on the LAN; revert if unstable. Keep preload disabled. No new HD/SD, audio gain, recording, or feeding behavior is introduced.

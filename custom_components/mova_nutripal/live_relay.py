@@ -44,10 +44,11 @@ class LiveRelay:
     session. The HA stream component shares its one decode worker among viewers.
     """
 
-    def __init__(self, session_factory, codec="hevc"):
+    def __init__(self, session_factory, codec="hevc", *, invalidate_authorization=None):
         self._codec = codec
         self._retry_after = 0.0
         self._session_factory = session_factory
+        self._invalidate_authorization = invalidate_authorization
         self._path = "/" + secrets.token_urlsafe(24) + "/live.flv"
         self._state = Lock()
         self._gate = Lock()
@@ -65,8 +66,11 @@ class LiveRelay:
     def set_enabled(self, enabled):
         with self._state:
             self._enabled = bool(enabled) and not self._closed
-            if not self._enabled and self._stopped is not None:
-                self._stopped.set()
+            if not self._enabled:
+                if self._stopped is not None:
+                    self._stopped.set()
+                if self._invalidate_authorization is not None:
+                    self._invalidate_authorization()
 
     def start(self):
         """Bind only the loopback interface; no device requests here."""
@@ -97,6 +101,8 @@ class LiveRelay:
     def _backoff(self):
         with self._state:
             self._retry_after = monotonic() + FAILURE_BACKOFF
+            if self._invalidate_authorization is not None:
+                self._invalidate_authorization()
 
     def capture(self, fn):
         """Do not start a snapshot while a live reader is waiting or active."""
@@ -136,12 +142,14 @@ class LiveRelay:
             handler.send_error(503)
             return
         acquired = started = False
+        request_started = monotonic()
         try:
             acquired = self._gate.acquire(timeout=START_WAIT)
             if not acquired:
                 _LOGGER.debug("NutriPal live request waiting for snapshot timed out")
                 handler.send_error(503)
                 return
+            _LOGGER.debug("NutriPal live gate acquired in %.1f s", monotonic() - request_started)
             with self._state:
                 enabled = (self._enabled and not self._closed and not stopped.is_set()
                            and monotonic() >= self._retry_after)
@@ -163,7 +171,8 @@ class LiveRelay:
                     handler.send_header("Connection", "close")
                     handler.end_headers()
                     started = True
-                    _LOGGER.debug("NutriPal live relay streaming (%s)", codec)
+                    _LOGGER.debug("NutriPal live relay streaming (%s) in %.1f s",
+                                  codec, monotonic() - request_started)
                     handler.wfile.write(header)
                     for packet in packets:
                         if stopped.is_set():
@@ -205,6 +214,8 @@ class LiveRelay:
         with self._state:
             self._closed = True
             self._enabled = False
+            if self._invalidate_authorization is not None:
+                self._invalidate_authorization()
             if self._stopped is not None:
                 self._stopped.set()
             server, thread = self._server, self._thread

@@ -98,7 +98,7 @@ def capture_jpeg(stream_url, ffmpeg, *, seconds=35):
 
 
 @contextmanager
-def open_video_session(username, password, did, runtime_path):
+def open_video_session(username, password, did, runtime_path, *, authorization_cache=None):
     """Open one authorized video session and always close it on exit."""
     from .api import NutriPalAPI
     from .const import MODEL
@@ -125,6 +125,8 @@ def open_video_session(username, password, did, runtime_path):
         api = NutriPalAPI(username, password)
         api.discover(did)
         # Honor the device's own camera switch; never enable it ourselves.
+        _LOGGER.debug("NutriPal video login/discovery in %.1f s", time.monotonic() - mark)
+        check_started = time.monotonic()
         stage = "camera_switch"
         result = api.cloud.send("get_properties", [{"did": str(did), "siid": 1000, "piid": 1}], retry_count=0, timeout=15)
         if not isinstance(result, list) or not any(
@@ -132,8 +134,15 @@ def open_video_session(username, password, did, runtime_path):
             and x.get("code") == 0 and x.get("value") == 1 for x in result
         ):
             raise VideoError("camera_off_or_unknown")
+        _LOGGER.debug("NutriPal camera switch check in %.1f s", time.monotonic() - check_started)
         stage = "video_provision"
-        identity = provision(api.cloud, did, MODEL)
+        provision_started = time.monotonic()
+        if authorization_cache is None:
+            identity, reused = provision(api.cloud, did, MODEL), False
+        else:
+            identity, reused = authorization_cache.get_or_provision(api.cloud, did, MODEL)
+        _LOGGER.debug("NutriPal video provisioning (%s) in %.1f s",
+                      "cache hit" if reused else "fresh", time.monotonic() - provision_started)
         api.close()
         api = None
         inputs = DreameLawnMowerCameraStreamRuntimeInputs(
@@ -156,10 +165,14 @@ def open_video_session(username, password, did, runtime_path):
         _local_target(session.stream_url)
         yield session.stream_url
     except VideoError:
+        if authorization_cache is not None:
+            authorization_cache.clear()
         raise
     except Exception:
         if stage == "video_consumer":
             raise  # The caller owns and sanitizes media-side failures.
+        if authorization_cache is not None:
+            authorization_cache.clear()
         # Upstream exceptions may contain private URL/identity values.
         failure = getattr(runtime, "last_failure", None) or {}
         status = failure.get("worker_status")
@@ -171,20 +184,25 @@ def open_video_session(username, password, did, runtime_path):
             try:
                 runtime.stop_live_stream(session)
             except Exception:
+                if authorization_cache is not None:
+                    authorization_cache.clear()
                 raise VideoError("xp2p_cleanup") from None
         if api is not None:
             try:
                 api.close()
             except Exception:
+                if authorization_cache is not None:
+                    authorization_cache.clear()
                 raise VideoError("video_cloud_cleanup") from None
 
 
-def snapshot(username, password, did, runtime_path):
+def snapshot(username, password, did, runtime_path, *, authorization_cache=None):
     """Keep the independent still-image path when live playback is not active."""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise VideoError("ffmpeg_missing")
-    with open_video_session(username, password, did, runtime_path) as url:
+    with open_video_session(username, password, did, runtime_path,
+                            authorization_cache=authorization_cache) as url:
         started = time.monotonic()
         try:
             return capture_jpeg(url, ffmpeg)

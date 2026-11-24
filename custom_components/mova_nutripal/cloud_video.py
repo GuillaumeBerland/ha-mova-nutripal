@@ -1,5 +1,7 @@
 """Read-only MOVA video provisioning; no device control or pairing."""
 from dataclasses import dataclass, field
+from threading import Lock
+import time
 
 
 class VideoError(RuntimeError):
@@ -14,6 +16,61 @@ class VideoIdentity:
     secret_id: str = field(repr=False)
     secret_key: str = field(repr=False)
     p2p_info: str = field(repr=False)
+    cache_until: float = field(default=0.0, repr=False, compare=False)
+
+
+# The P2P ticket lifetime is not documented. Cap reuse conservatively and
+# require a recognizable absolute expiry from the authorization response.
+MAX_CACHE_SECONDS = 60
+EXPIRY_MARGIN = 5
+
+
+def _cache_deadline(expires_at):
+    if type(expires_at) not in (int, float):
+        return 0.0
+    # Accept epoch milliseconds or seconds, not relative/unknown formats.
+    if expires_at >= 1_000_000_000_000:
+        expires_at /= 1000
+    remaining = expires_at - time.time() - EXPIRY_MARGIN
+    if not 0 < remaining < 366 * 86400:
+        return 0.0
+    return time.monotonic() + min(MAX_CACHE_SECONDS, remaining)
+
+
+class VideoAuthorizationCache:
+    """Per-camera, in-memory only; an invalidation wins over an in-flight fill."""
+
+    def __init__(self):
+        self._lock = Lock()
+        self._identity = None
+        self._scope = None
+        self._generation = 0
+
+    def clear(self):
+        with self._lock:
+            self._identity = None
+            self._scope = None
+            self._generation += 1
+
+    def get_or_provision(self, cloud, did, model):
+        scope = (str(did), model, getattr(cloud, "_uid", None))
+        with self._lock:
+            identity = self._identity
+            if (self._scope == scope and identity is not None
+                    and time.monotonic() < identity.cache_until):
+                return identity, True
+            self._identity = None
+            self._scope = None
+            generation = self._generation
+        # The relay gate serializes calls; never hold a lock across cloud I/O.
+        identity = provision(cloud, did, model)
+        with self._lock:
+            if generation != self._generation:
+                raise VideoError("video_authorization_invalidated")
+            if time.monotonic() < identity.cache_until:
+                self._identity = identity
+                self._scope = scope
+        return identity, False
 
 
 def _read(cloud, endpoint, params):
@@ -40,7 +97,9 @@ def _required(data, key):
 
 def provision(cloud, did, model):
     """Fetch only the four endpoints validated on NutriPal q2503."""
-    token = _required(_read(cloud, "user/accesstoken", {"os": 1}), "token")
+    token_data = _read(cloud, "user/accesstoken", {"os": 1})
+    token = _required(token_data, "token")
+    deadline = _cache_deadline(token_data.get("expireAt"))
     params = {"did": str(did), "os": 1, "accesstoken": token, "accessToken": token}
     if _read(cloud, "dev/isDevUser", params).get("isDevUser") is not True:
         raise VideoError("video_permission_denied")
@@ -52,4 +111,4 @@ def provision(cloud, did, model):
     p2p = _read(cloud, "dev/getP2PInfo", params)
     return VideoIdentity(*(_required(identity, key) for key in (
         "deviceId", "productId", "deviceName", "secretId", "secretKey")),
-        _required(p2p, "p2pInfo"))
+        _required(p2p, "p2pInfo"), cache_until=deadline)

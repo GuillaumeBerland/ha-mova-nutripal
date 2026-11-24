@@ -11,9 +11,10 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from .const import DOMAIN
 from .video import open_video_session, snapshot
 from .live_relay import LiveRelay
-from .cloud_video import VideoError
+from .cloud_video import VideoAuthorizationCache, VideoError
 
 _LOGGER = logging.getLogger(__name__)
+SNAPSHOT_GRACE = 0.75
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -39,6 +40,7 @@ class NutriPalCamera(Camera):
         self._last_image = None
         self._closing = False
         self._relay = None
+        self._authorization_cache = VideoAuthorizationCache()
 
     @property
     def available(self):
@@ -52,8 +54,11 @@ class NutriPalCamera(Camera):
         self._video_args = (self.entry.data["username"], self.entry.data["password"],
                             self.coordinator.did,
                             self.hass.config.path(".storage", "mova_nutripal_xp2p"))
-        self._relay = LiveRelay(partial(open_video_session, *self._video_args),
-                                codec=self.entry.options.get("video_codec", "h264"))
+        self._relay = LiveRelay(
+            partial(open_video_session, *self._video_args,
+                    authorization_cache=self._authorization_cache),
+            codec=self.entry.options.get("video_codec", "h264"),
+            invalidate_authorization=self._authorization_cache.clear)
         self._relay.set_enabled(self.available)
         self.async_on_remove(self.coordinator.async_add_listener(self._coordinator_updated))
         self.async_on_remove(self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, self._async_stop))
@@ -66,10 +71,39 @@ class NutriPalCamera(Camera):
             self._last_image = None
         self.async_write_ha_state()
 
+    def _live_requested(self):
+        # HA registers a provider before starting its HTTP reader. Detect this
+        # early, not only after the relay receives the GET.
+        return self._relay.active or (self.stream is not None and bool(self.stream.outputs()))
+
+    async def _live_image(self, width=None, height=None):
+        if self.stream is not None:
+            try:
+                image = await self.stream.async_get_image(
+                    width=width, height=height, wait_for_next_keyframe=False)
+                if self.available and image:
+                    self._last_image = image
+                    self._last_attempt = time.monotonic()
+                    return image
+            except Exception:
+                _LOGGER.debug("NutriPal live keyframe not available")
+        if self.available and self._last_attempt and time.monotonic() - self._last_attempt < 30:
+            return self._last_image
+        return None
+
     async def _capture(self):
+        # A poster request often arrives just before HA requests HLS. Give
+        # that reader a short head start, without opening a remote session.
+        await asyncio.sleep(SNAPSHOT_GRACE)
+        if not self.available or not self.hass.is_running:
+            return None
+        if self._live_requested():
+            _LOGGER.debug("NutriPal standalone snapshot skipped for live stream")
+            return await self._live_image()
         try:
             image = await self.hass.async_add_executor_job(
-                self._relay.capture, partial(snapshot, *self._video_args))
+                self._relay.capture, partial(snapshot, *self._video_args,
+                                             authorization_cache=self._authorization_cache))
             if self.available and self.hass.is_running:
                 self._last_image = image
                 return image
@@ -95,18 +129,8 @@ class NutriPalCamera(Camera):
             return None
         if self._relay is None:
             return None
-        if self._relay.active:
-            # HA already owns the native stream. Reuse its decoded keyframe
-            # instead of opening another XP2P session for a thumbnail.
-            if self.stream is not None:
-                try:
-                    image = await self.stream.async_get_image(
-                        width=width, height=height, wait_for_next_keyframe=False)
-                    if self.available:
-                        return image
-                except Exception:
-                    _LOGGER.debug("NutriPal live keyframe not available")
-            return None
+        if self._live_requested():
+            return await self._live_image(width, height)
         if self._task is not None and not self._task.done():
             return await asyncio.shield(self._task)
         # Avoid repeated logins/session startup from an automatic thumbnail refresh.
