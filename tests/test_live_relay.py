@@ -120,7 +120,65 @@ class RelayTests(unittest.TestCase):
             raise VideoError('expected')
         with self.assertRaisesRegex(VideoError, 'expected'):
             self.relay.capture(fail)
-        self.assertEqual(self.relay.capture(lambda: b'jpeg'), b'jpeg')
+        with self.assertRaisesRegex(VideoError, 'video_backoff'):
+            self.relay.capture(lambda: self.fail('cooldown bypassed'))
+        with patch.object(relay_module, 'monotonic', return_value=self.relay._retry_after + 1):
+            self.assertEqual(self.relay.capture(lambda: b'jpeg'), b'jpeg')
+
+    def test_live_waits_for_existing_snapshot(self):
+        release = threading.Event()
+        entered = threading.Event()
+        def capture():
+            entered.set()
+            release.wait(2)
+            return b'jpeg'
+        snap = threading.Thread(target=lambda: self.relay.capture(capture))
+        snap.start()
+        self.assertTrue(entered.wait(1))
+        results = []
+        def live():
+            _, response = self.connect()
+            results.append((response.status, response.read()))
+        with patch.object(relay_module, 'iter_enhanced_flv', return_value=(x for x in [HEADER])):
+            reader = threading.Thread(target=live)
+            reader.start()
+            for _ in range(100):
+                if self.relay.active:
+                    break
+                threading.Event().wait(.01)
+            try:
+                self.assertTrue(self.relay.active)
+                self.assertEqual(self.opens, 0)
+                with self.assertRaisesRegex(VideoError, 'video_busy'):
+                    self.relay.capture(lambda: self.fail('second snapshot'))
+            finally:
+                release.set()
+                snap.join(3)
+                reader.join(3)
+            self.assertEqual(results, [(200, HEADER)])
+            self.assertEqual(self.opens, 1)
+
+    def test_backoff_blocks_both_paths_after_native_error(self):
+        def packets(*_):
+            raise VideoError('camera_off_or_unknown')
+            yield b''
+        with patch.object(relay_module, 'iter_enhanced_flv', side_effect=packets):
+            with self.assertLogs(relay_module.__name__, level='WARNING'):
+                _, response = self.connect()
+                self.assertEqual(response.status, 503)
+            response.read()
+            _, retry = self.connect()
+            self.assertEqual(retry.status, 503)
+            self.assertEqual(self.opens, 1)
+            with self.assertRaisesRegex(VideoError, 'video_backoff'):
+                self.relay.capture(lambda: self.fail('cooldown bypassed'))
+
+    def test_codec_selection(self):
+        self.relay.set_codec('h264')
+        with patch.object(relay_module, 'iter_h264_flv', return_value=(x for x in [HEADER])) as h264:
+            _, response = self.connect()
+            self.assertEqual(response.read(), HEADER)
+            h264.assert_called_once()
 
     def test_close_idempotent(self):
         self.relay.start()

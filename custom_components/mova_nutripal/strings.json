@@ -27,7 +27,8 @@
           "threshold": "Bowl threshold (g)",
           "max_complement": "Maximum portions per simulated supplement",
           "manual_enabled": "Allow manual supplement (one portion)",
-          "auto_calibration": "Automatic passive calibration"
+          "auto_calibration": "Automatic passive calibration",
+          "video_codec": "Live video codec (h264 compatible / hevc native)"
         }
       }
     }

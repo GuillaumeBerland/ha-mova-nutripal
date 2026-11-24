@@ -4,9 +4,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import logging
 import secrets
 from threading import Event, Lock, Thread
+from time import monotonic
 
 from .cloud_video import VideoError
 from .video import iter_enhanced_flv
+from .transcode import iter_h264_flv
+
+START_WAIT = 12
+FAILURE_BACKOFF = 60
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,7 +44,9 @@ class LiveRelay:
     session. The HA stream component shares its one decode worker among viewers.
     """
 
-    def __init__(self, session_factory):
+    def __init__(self, session_factory, codec="hevc"):
+        self._codec = codec
+        self._retry_after = 0.0
         self._session_factory = session_factory
         self._path = "/" + secrets.token_urlsafe(24) + "/live.flv"
         self._state = Lock()
@@ -79,15 +86,32 @@ class LiveRelay:
                 self._server, self._thread = server, thread
             return f"http://127.0.0.1:{self._server.server_port}{self._path}"
 
+    def set_codec(self, codec):
+        codec = codec if codec in ("h264", "hevc") else "h264"
+        with self._state:
+            if codec != self._codec:
+                self._codec = codec
+                if self._stopped is not None:
+                    self._stopped.set()
+
+    def _backoff(self):
+        with self._state:
+            self._retry_after = monotonic() + FAILURE_BACKOFF
+
     def capture(self, fn):
-        """Run the existing snapshot path only when no other reader owns XP2P."""
-        if not self._gate.acquire(blocking=False):
-            raise VideoError("video_busy")
+        """Do not start a snapshot while a live reader is waiting or active."""
+        with self._state:
+            if not self._enabled or self._closed:
+                raise VideoError("camera_off_or_unknown")
+            if monotonic() < self._retry_after:
+                raise VideoError("video_backoff")
+            if self._active.is_set() or not self._gate.acquire(blocking=False):
+                raise VideoError("video_busy")
         try:
-            with self._state:
-                if not self._enabled or self._closed:
-                    raise VideoError("camera_off_or_unknown")
             return fn()
+        except Exception:
+            self._backoff()
+            raise
         finally:
             self._gate.release()
 
@@ -95,25 +119,41 @@ class LiveRelay:
         if not secrets.compare_digest(handler.path, self._path):
             handler.send_error(404)
             return
-        if not self._gate.acquire(blocking=False):
+        stopped = Event()
+        with self._state:
+            if not self._enabled or self._closed:
+                refusal = "disabled"
+            elif monotonic() < self._retry_after:
+                refusal = "backoff"
+            elif self._active.is_set():
+                refusal = "already_live"
+            else:
+                refusal = None
+                self._stopped = stopped
+                self._active.set()  # Reserve before waiting on an existing snapshot.
+        if refusal:
+            _LOGGER.debug("NutriPal live request refused (%s)", refusal)
             handler.send_error(503)
             return
-        stopped = Event()
-        started = False
+        acquired = started = False
         try:
+            acquired = self._gate.acquire(timeout=START_WAIT)
+            if not acquired:
+                _LOGGER.debug("NutriPal live request waiting for snapshot timed out")
+                handler.send_error(503)
+                return
             with self._state:
-                enabled = self._enabled and not self._closed
-                if enabled:
-                    self._stopped = stopped
-                    self._active.set()
+                enabled = (self._enabled and not self._closed and not stopped.is_set()
+                           and monotonic() >= self._retry_after)
+                codec = self._codec
             if not enabled:
                 handler.send_error(503)
                 return
             with self._session_factory() as stream_url:
                 if stopped.is_set():
                     return
-                with closing(iter_enhanced_flv(stream_url, stopped)) as packets:
-                    # Send headers only after the FLV header is validated.
+                iterator = iter_h264_flv if codec == "h264" else iter_enhanced_flv
+                with closing(iterator(stream_url, stopped)) as packets:
                     header = next(packets)
                     if stopped.is_set():
                         return
@@ -123,14 +163,19 @@ class LiveRelay:
                     handler.send_header("Connection", "close")
                     handler.end_headers()
                     started = True
+                    _LOGGER.debug("NutriPal live relay streaming (%s)", codec)
                     handler.wfile.write(header)
                     for packet in packets:
                         if stopped.is_set():
                             break
                         handler.wfile.write(packet)
         except (OSError, EOFError, StopIteration):
+            if not started and not stopped.is_set():
+                self._backoff()
             _LOGGER.debug("NutriPal live stream ended or disconnected")
         except VideoError as exc:
+            if not stopped.is_set():
+                self._backoff()
             _LOGGER.warning("NutriPal live stream failed (%s)", str(exc))
             if not started and not stopped.is_set():
                 try:
@@ -138,6 +183,8 @@ class LiveRelay:
                 except OSError:
                     pass
         except Exception:
+            if not stopped.is_set():
+                self._backoff()
             _LOGGER.warning("NutriPal live stream failed (unexpected error)")
             if not started and not stopped.is_set():
                 try:
@@ -149,7 +196,8 @@ class LiveRelay:
             with self._state:
                 self._stopped = None
                 self._active.clear()
-            self._gate.release()
+                if acquired:
+                    self._gate.release()
             handler.close_connection = True
 
     def close(self):

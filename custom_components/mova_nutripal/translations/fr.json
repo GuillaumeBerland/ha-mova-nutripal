@@ -27,7 +27,8 @@
           "threshold": "Seuil du bol (g)",
           "max_complement": "Portions maximales par complément simulé",
           "manual_enabled": "Autoriser le complément manuel (une portion)",
-          "auto_calibration": "Calibration passive automatique"
+          "auto_calibration": "Calibration passive automatique",
+          "video_codec": "Codec du direct vidéo (h264 compatible / hevc natif)"
         }
       }
     }

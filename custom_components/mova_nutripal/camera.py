@@ -52,13 +52,15 @@ class NutriPalCamera(Camera):
         self._video_args = (self.entry.data["username"], self.entry.data["password"],
                             self.coordinator.did,
                             self.hass.config.path(".storage", "mova_nutripal_xp2p"))
-        self._relay = LiveRelay(partial(open_video_session, *self._video_args))
+        self._relay = LiveRelay(partial(open_video_session, *self._video_args),
+                                codec=self.entry.options.get("video_codec", "h264"))
         self._relay.set_enabled(self.available)
         self.async_on_remove(self.coordinator.async_add_listener(self._coordinator_updated))
         self.async_on_remove(self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, self._async_stop))
 
     def _coordinator_updated(self):
         if self._relay is not None:
+            self._relay.set_codec(self.entry.options.get("video_codec", "h264"))
             self._relay.set_enabled(self.available)
         if not self.available:
             self._last_image = None

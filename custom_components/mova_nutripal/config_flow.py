@@ -45,4 +45,5 @@ class NutriPalOptions(config_entries.OptionsFlow):
             vol.Required("max_complement", default=values["max_complement"]): vol.All(vol.Coerce(int), vol.Range(min=1, max=3)),
             vol.Required("manual_enabled", default=values["manual_enabled"]): bool,
             vol.Required("auto_calibration", default=values["auto_calibration"]): bool,
+            vol.Required("video_codec", default=values.get("video_codec", "h264")): vol.In(["h264", "hevc"]),
         }))
