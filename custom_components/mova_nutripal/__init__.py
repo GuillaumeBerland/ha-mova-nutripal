@@ -4,7 +4,7 @@ from .api import NutriPalAPI
 from .const import DOMAIN
 from .coordinator import NutriPalCoordinator
 
-PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.NUMBER, Platform.BUTTON]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.NUMBER, Platform.BUTTON, Platform.CAMERA]
 
 async def async_setup_entry(hass, entry):
     api = await hass.async_add_executor_job(NutriPalAPI, entry.data["username"], entry.data["password"])

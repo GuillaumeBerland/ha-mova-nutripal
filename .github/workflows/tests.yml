@@ -17,3 +17,8 @@ jobs:
           for f in __init__.py protocol.py exceptions.py types.py LICENSE; do
             test -f "custom_components/mova_nutripal/dreame_cloud/$f"
           done
+      - name: Check bundled camera runtime sources and license
+        run: |
+          for f in __init__.py xp2p_runtime_bootstrap.py xp2p_host_runtime.py xp2p_host_worker_blob.py LICENSE UPSTREAM_COMMIT; do
+            test -f "custom_components/mova_nutripal/xp2p/$f"
+          done
