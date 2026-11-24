@@ -45,19 +45,19 @@
         "name": "Bowl weight"
       },
       "configured_weight": {
-        "name": "MOVA nominal portion weight"
+        "name": "Nominal portion weight"
       },
       "calibration_weight": {
         "name": "Effective portion weight"
       },
       "estimated_distributed": {
-        "name": "Estimated kibble dispensed today"
+        "name": "Estimated distribution today"
       },
       "forecast": {
         "name": "Forecast distribution today"
       },
       "budget": {
-        "name": "Remaining extra kibble budget"
+        "name": "Estimated extra budget"
       },
       "target": {
         "name": "Daily distribution target"
@@ -78,13 +78,13 @@
         "name": "Supplement stock (MOVA value)"
       },
       "remaining_portions": {
-        "name": "Scheduled portions remaining today"
+        "name": "Scheduled portions remaining"
       },
       "suggested_portions": {
         "name": "Simulated extra portions"
       },
       "device_status": {
-        "name": "Raw device status code"
+        "name": "Device status code"
       },
       "warning_mask": {
         "name": "Warning bitmask"
@@ -93,10 +93,10 @@
         "name": "Fault bitmask"
       },
       "feeding_mode": {
-        "name": "Raw feeding mode code"
+        "name": "Feeding mode code"
       },
       "sd_card_status": {
-        "name": "Raw SD card status code"
+        "name": "SD card status code"
       },
       "decision": {
         "name": "Simulated decision",
@@ -145,7 +145,7 @@
         }
       },
       "manual_result": {
-        "name": "Last manual command",
+        "name": "Last manual command result",
         "state": {
           "none": "No command",
           "pending": "Pending",
@@ -195,13 +195,13 @@
     },
     "number": {
       "target_setting": {
-        "name": "Distribution target (g)"
+        "name": "Daily distribution target setting"
       },
       "reference_setting": {
-        "name": "Reference weight (g/portion)"
+        "name": "Reference portion weight"
       },
       "threshold_setting": {
-        "name": "Bowl threshold (g)"
+        "name": "Bowl threshold"
       },
       "max_setting": {
         "name": "Maximum simulated portions"

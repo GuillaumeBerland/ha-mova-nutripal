@@ -45,22 +45,22 @@
         "name": "Poids dans le bol"
       },
       "configured_weight": {
-        "name": "Poids nominal MOVA par portion"
+        "name": "Poids nominal par portion"
       },
       "calibration_weight": {
         "name": "Poids utilisé par portion"
       },
       "estimated_distributed": {
-        "name": "Croquettes distribuées (estimation)"
+        "name": "Distribution estimée aujourd’hui"
       },
       "forecast": {
-        "name": "Distribution prévue aujourd’hui"
+        "name": "Distribution prévisionnelle"
       },
       "budget": {
-        "name": "Budget de croquettes supplémentaire"
+        "name": "Budget complémentaire estimé"
       },
       "target": {
-        "name": "Objectif de distribution quotidien"
+        "name": "Objectif journalier"
       },
       "meals_today": {
         "name": "Prises alimentaires aujourd’hui"
@@ -78,19 +78,19 @@
         "name": "Stock de compléments (valeur MOVA)"
       },
       "remaining_portions": {
-        "name": "Portions programmées restantes aujourd’hui"
+        "name": "Portions autonomes restantes"
       },
       "suggested_portions": {
-        "name": "Complément simulé en portions"
+        "name": "Complément simulé (portions)"
       },
       "device_status": {
         "name": "Code état appareil"
       },
       "warning_mask": {
-        "name": "Code alertes (masque)"
+        "name": "Masque des alertes"
       },
       "fault_mask": {
-        "name": "Code défauts (masque)"
+        "name": "Masque des défauts"
       },
       "feeding_mode": {
         "name": "Code mode de distribution"
@@ -114,7 +114,7 @@
         "name": "Batterie"
       },
       "desiccant_days": {
-        "name": "Durée de vie du dessiccant"
+        "name": "Durée de vie restante du dessiccant"
       },
       "measured_weight": {
         "name": "Poids médian calibré par portion"
@@ -123,7 +123,7 @@
         "name": "Mesures de calibration valides"
       },
       "status_text": {
-        "name": "État de la gamelle",
+        "name": "État du distributeur",
         "state": {
           "idle": "Veille",
           "feeding": "Distribution de croquettes",
@@ -145,7 +145,7 @@
         }
       },
       "manual_result": {
-        "name": "Dernière commande manuelle",
+        "name": "Résultat de la dernière commande",
         "state": {
           "none": "Aucune commande",
           "pending": "En attente",
@@ -175,7 +175,7 @@
         "name": "Caméra activée"
       },
       "simulation": {
-        "name": "Régulation en simulation"
+        "name": "Mode simulation"
       },
       "has_warning": {
         "name": "Alerte active"
@@ -184,7 +184,7 @@
         "name": "Défaut actif"
       },
       "calibration_enabled": {
-        "name": "Calibration passive activée"
+        "name": "Calibration passive"
       },
       "manual_enabled": {
         "name": "Option complément manuel activée"
@@ -195,13 +195,13 @@
     },
     "number": {
       "target_setting": {
-        "name": "Objectif de distribution (g)"
+        "name": "Réglage de l’objectif journalier"
       },
       "reference_setting": {
-        "name": "Poids de référence (g/portion)"
+        "name": "Poids de référence par portion"
       },
       "threshold_setting": {
-        "name": "Seuil du bol (g)"
+        "name": "Seuil du bol"
       },
       "max_setting": {
         "name": "Maximum de portions simulées"
