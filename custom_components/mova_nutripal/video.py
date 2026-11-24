@@ -1,5 +1,7 @@
 """Bounded, on-demand JPEG capture. No media is retained by this module."""
 import http.client
+import logging
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import select
@@ -11,6 +13,8 @@ from urllib.parse import urlsplit
 
 from .cloud_video import VideoError, provision
 from .flv import convert_stream
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _local_target(stream_url):
@@ -93,12 +97,15 @@ def capture_jpeg(stream_url, ffmpeg, *, seconds=35):
         return image
 
 
-def snapshot(username, password, did, runtime_path):
-    """Separate cloud session; never share the feeding adapter's command lock."""
+@contextmanager
+def open_video_session(username, password, did, runtime_path):
+    """Open one authorized video session and always close it on exit."""
     from .api import NutriPalAPI
     from .const import MODEL
 
     stage = "runtime_import"
+    started = time.monotonic()
+    mark = started
     api = None
     runtime = None
     session = None
@@ -107,15 +114,13 @@ def snapshot(username, password, did, runtime_path):
         from .xp2p.xp2p_host_runtime import DreameLawnMowerXp2pHostRuntime
         from .xp2p.xp2p_runtime_bootstrap import ensure_xp2p_host_runtime
 
-        stage = "ffmpeg_missing"
-        ffmpeg = shutil.which("ffmpeg")
-        if not ffmpeg:
-            raise VideoError(stage)
         stage = "runtime_prepare"
         assets = ensure_xp2p_host_runtime(runtime_path)
         assets.validate()
         if not (assets.startup_probe or {}).get("ready"):
             raise VideoError("runtime_probe_failed")
+        _LOGGER.debug("NutriPal video runtime ready in %.1f s", time.monotonic() - mark)
+        mark = time.monotonic()
         stage = "video_login"
         api = NutriPalAPI(username, password)
         api.discover(did)
@@ -138,16 +143,23 @@ def snapshot(username, password, did, runtime_path):
             secret_key=identity.secret_key, app_id=identity.secret_id,
             app_secret=identity.secret_key, stream_channel=0,
         )
+        _LOGGER.debug("NutriPal video authorization in %.1f s", time.monotonic() - mark)
+        mark = time.monotonic()
         stage = "xp2p_connect"
         runtime = DreameLawnMowerXp2pHostRuntime(assets)
         session = runtime.start_live_stream(inputs, command_timeout_us=2_500_000,
             device_status_attempts=20, device_status_retry_interval=2.0,
             delegate_attempts=20, delegate_retry_interval=0.5)
-        stage = "jpeg_capture"
-        return capture_jpeg(session.stream_url, ffmpeg)
+        _LOGGER.debug("NutriPal XP2P ready in %.1f s (total %.1f s)",
+                      time.monotonic() - mark, time.monotonic() - started)
+        stage = "video_consumer"
+        _local_target(session.stream_url)
+        yield session.stream_url
     except VideoError:
         raise
     except Exception:
+        if stage == "video_consumer":
+            raise  # The caller owns and sanitizes media-side failures.
         # Upstream exceptions may contain private URL/identity values.
         failure = getattr(runtime, "last_failure", None) or {}
         status = failure.get("worker_status")
@@ -165,3 +177,46 @@ def snapshot(username, password, did, runtime_path):
                 api.close()
             except Exception:
                 raise VideoError("video_cloud_cleanup") from None
+
+
+def snapshot(username, password, did, runtime_path):
+    """Keep the independent still-image path when live playback is not active."""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise VideoError("ffmpeg_missing")
+    with open_video_session(username, password, did, runtime_path) as url:
+        started = time.monotonic()
+        try:
+            return capture_jpeg(url, ffmpeg)
+        except VideoError:
+            raise
+        except Exception:
+            raise VideoError("jpeg_capture") from None
+        finally:
+            _LOGGER.debug("NutriPal JPEG capture completed in %.1f s", time.monotonic() - started)
+
+
+def iter_enhanced_flv(stream_url, stopped):
+    """Read one native FLV connection; yield complete converted tags until stopped."""
+    host, port, target = _local_target(stream_url)
+    connection = http.client.HTTPConnection(host, port, timeout=8)
+    try:
+        connection.request("GET", target)
+        response = connection.getresponse()
+        if response.status != 200:
+            raise VideoError("video_http_status")
+
+        def read_exact(size):
+            data = bytearray()
+            while len(data) < size:
+                if stopped.is_set():
+                    raise EOFError()
+                chunk = response.read1(size - len(data))
+                if not chunk:
+                    raise EOFError()
+                data.extend(chunk)
+            return bytes(data)
+
+        yield from convert_stream(read_exact)
+    finally:
+        connection.close()

@@ -1,13 +1,16 @@
-"""Experimental still-image camera, disabled by default in the entity registry."""
+"""Experimental JPEG and native HLS camera, disabled by default."""
 import asyncio
 import logging
 import time
+from functools import partial
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 
 from .const import DOMAIN
-from .video import snapshot
+from .video import open_video_session, snapshot
+from .live_relay import LiveRelay
 from .cloud_video import VideoError
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,7 +25,7 @@ class NutriPalCamera(Camera):
     _attr_has_entity_name = True
     _attr_name = "Camera"
     _attr_entity_registry_enabled_default = False
-    _attr_supported_features = CameraEntityFeature(0)  # No continuous stream in this first milestone.
+    _attr_supported_features = CameraEntityFeature.STREAM
 
     def __init__(self, coordinator, entry):
         super().__init__()
@@ -35,6 +38,7 @@ class NutriPalCamera(Camera):
         self._last_attempt = 0.0
         self._last_image = None
         self._closing = False
+        self._relay = None
 
     @property
     def available(self):
@@ -45,19 +49,25 @@ class NutriPalCamera(Camera):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
+        self._video_args = (self.entry.data["username"], self.entry.data["password"],
+                            self.coordinator.did,
+                            self.hass.config.path(".storage", "mova_nutripal_xp2p"))
+        self._relay = LiveRelay(partial(open_video_session, *self._video_args))
+        self._relay.set_enabled(self.available)
         self.async_on_remove(self.coordinator.async_add_listener(self._coordinator_updated))
+        self.async_on_remove(self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, self._async_stop))
 
     def _coordinator_updated(self):
+        if self._relay is not None:
+            self._relay.set_enabled(self.available)
         if not self.available:
             self._last_image = None
         self.async_write_ha_state()
 
     async def _capture(self):
         try:
-            image = await self.hass.async_add_executor_job(snapshot,
-                self.entry.data["username"], self.entry.data["password"],
-                self.coordinator.did,
-                self.hass.config.path(".storage", "mova_nutripal_xp2p"))
+            image = await self.hass.async_add_executor_job(
+                self._relay.capture, partial(snapshot, *self._video_args))
             if self.available and self.hass.is_running:
                 self._last_image = image
                 return image
@@ -71,9 +81,29 @@ class NutriPalCamera(Camera):
         finally:
             self._last_attempt = time.monotonic()
 
+    async def stream_source(self):
+        """Return a stable local URL without waiting for MOVA/XP2P startup."""
+        if not self.available or self._relay is None or not self.hass.is_running:
+            return None
+        return await self.hass.async_add_executor_job(self._relay.start)
+
     async def async_camera_image(self, width=None, height=None):
         if not self.available or not self.hass.is_running:
             self._last_image = None
+            return None
+        if self._relay is None:
+            return None
+        if self._relay.active:
+            # HA already owns the native stream. Reuse its decoded keyframe
+            # instead of opening another XP2P session for a thumbnail.
+            if self.stream is not None:
+                try:
+                    image = await self.stream.async_get_image(
+                        width=width, height=height, wait_for_next_keyframe=False)
+                    if self.available:
+                        return image
+                except Exception:
+                    _LOGGER.debug("NutriPal live keyframe not available")
             return None
         if self._task is not None and not self._task.done():
             return await asyncio.shield(self._task)
@@ -84,9 +114,16 @@ class NutriPalCamera(Camera):
         self._task = self.hass.async_create_task(self._capture())
         return await asyncio.shield(self._task)
 
-    async def async_will_remove_from_hass(self):
+    async def _async_stop(self, _event=None):
         self._closing = True
         self._last_image = None
+        if self._relay is not None:
+            self._relay.set_enabled(False)
         if self._task is not None and not self._task.done():
             await asyncio.shield(self._task)
+        if self._relay is not None:
+            await self.hass.async_add_executor_job(self._relay.close)
+
+    async def async_will_remove_from_hass(self):
+        await self._async_stop()
         await super().async_will_remove_from_hass()
