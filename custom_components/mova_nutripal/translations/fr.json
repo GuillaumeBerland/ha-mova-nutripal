@@ -1,0 +1,215 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MOVA NutriPal",
+        "description": "Connexion au cloud MOVA européen. Régulation automatique en simulation.",
+        "data": {
+          "username": "Adresse e-mail",
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Connexion impossible ou gamelle introuvable"
+    },
+    "abort": {
+      "already_configured": "Déjà configurée"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Réglages du mode hybride",
+        "data": {
+          "target": "Objectif quotidien (g)",
+          "portion_weight": "Poids de référence par portion (g)",
+          "threshold": "Seuil du bol (g)",
+          "max_complement": "Portions maximales par complément simulé",
+          "manual_enabled": "Autoriser le complément manuel (une portion)",
+          "auto_calibration": "Calibration passive automatique"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "intake_today": {
+        "name": "Consommation aujourd’hui"
+      },
+      "intake_yesterday": {
+        "name": "Consommation hier"
+      },
+      "bowl_weight": {
+        "name": "Poids dans le bol"
+      },
+      "configured_weight": {
+        "name": "Poids configuré par portion"
+      },
+      "calibration_weight": {
+        "name": "Poids de référence par portion"
+      },
+      "estimated_distributed": {
+        "name": "Distribution estimée aujourd’hui"
+      },
+      "forecast": {
+        "name": "Distribution totale prévisionnelle"
+      },
+      "budget": {
+        "name": "Budget complémentaire estimé"
+      },
+      "target": {
+        "name": "Objectif journalier"
+      },
+      "meals_today": {
+        "name": "Prises alimentaires aujourd’hui"
+      },
+      "meals_yesterday": {
+        "name": "Prises alimentaires hier"
+      },
+      "portions_today": {
+        "name": "Portions distribuées aujourd’hui"
+      },
+      "portions_yesterday": {
+        "name": "Portions distribuées hier"
+      },
+      "supplement_remaining": {
+        "name": "Portions de compléments restantes"
+      },
+      "remaining_portions": {
+        "name": "Portions autonomes restantes"
+      },
+      "suggested_portions": {
+        "name": "Complément simulé en portions"
+      },
+      "device_status": {
+        "name": "État appareil"
+      },
+      "warning_mask": {
+        "name": "Masque alertes"
+      },
+      "fault_mask": {
+        "name": "Masque défauts"
+      },
+      "feeding_mode": {
+        "name": "Mode de distribution"
+      },
+      "sd_card_status": {
+        "name": "État carte SD"
+      },
+      "decision": {
+        "name": "Décision simulée",
+        "state": {
+          "unavailable": "Données indisponibles",
+          "schedule_uncertain": "Programme incertain",
+          "device_not_ready": "Appareil non prêt",
+          "budget_reached": "Budget atteint",
+          "meal_soon": "Repas autonome imminent",
+          "bowl_not_empty": "Bol suffisamment rempli",
+          "would_feed": "Complément possible (simulation)"
+        }
+      },
+      "battery": {
+        "name": "Batterie"
+      },
+      "desiccant_days": {
+        "name": "Durée de vie du dessiccant"
+      },
+      "measured_weight": {
+        "name": "Poids moyen calibré"
+      },
+      "calibration_samples": {
+        "name": "Mesures de calibration"
+      },
+      "status_text": {
+        "name": "État de la gamelle",
+        "state": {
+          "idle": "Veille",
+          "feeding": "Distribution de croquettes",
+          "supplements": "Distribution de compléments",
+          "fault": "Défaut appareil",
+          "food_fault": "Défaut croquettes",
+          "supplement_fault": "Défaut compléments",
+          "unknown": "État inconnu"
+        }
+      },
+      "manual_state": {
+        "name": "Autorisation du complément manuel",
+        "state": {
+          "disabled": "Désactivé",
+          "pending": "Commande à vérifier",
+          "cooldown": "Délai de sécurité",
+          "blocked": "Conditions non réunies",
+          "ready": "Autorisé"
+        }
+      },
+      "manual_result": {
+        "name": "Résultat de la dernière commande",
+        "state": {
+          "none": "Aucune commande",
+          "pending": "En attente",
+          "confirmed": "Compteur confirmé",
+          "uncertain": "Résultat incertain",
+          "acknowledged": "Vérifié manuellement"
+        }
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "En ligne"
+      },
+      "battery_present": {
+        "name": "Piles présentes"
+      },
+      "child_lock": {
+        "name": "Verrouillage enfant"
+      },
+      "camera_enabled": {
+        "name": "Caméra activée"
+      },
+      "simulation": {
+        "name": "Mode simulation"
+      },
+      "has_warning": {
+        "name": "Alerte active"
+      },
+      "has_fault": {
+        "name": "Défaut actif"
+      },
+      "calibration_enabled": {
+        "name": "Calibration passive"
+      },
+      "manual_enabled": {
+        "name": "Complément manuel autorisé"
+      },
+      "manual_pending": {
+        "name": "Commande à vérifier"
+      }
+    },
+    "number": {
+      "target_setting": {
+        "name": "Réglage objectif journalier"
+      },
+      "reference_setting": {
+        "name": "Réglage poids de référence"
+      },
+      "threshold_setting": {
+        "name": "Réglage seuil du bol"
+      },
+      "max_setting": {
+        "name": "Réglage maximum de portions"
+      }
+    },
+    "button": {
+      "feed_one": {
+        "name": "Distribuer une portion (complément)"
+      },
+      "reset_calibration": {
+        "name": "Réinitialiser la calibration"
+      },
+      "acknowledge_manual": {
+        "name": "Déverrouiller après vérification physique"
+      }
+    }
+  }
+}

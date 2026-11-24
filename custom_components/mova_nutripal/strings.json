@@ -1,0 +1,215 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MOVA NutriPal",
+        "description": "Connect to MOVA EU cloud. Automatic feeding is simulation only.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Connection failed or feeder not found"
+    },
+    "abort": {
+      "already_configured": "Already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Hybrid mode settings",
+        "data": {
+          "target": "Daily target (g)",
+          "portion_weight": "Reference portion weight (g)",
+          "threshold": "Bowl threshold (g)",
+          "max_complement": "Maximum portions per simulated supplement",
+          "manual_enabled": "Allow manual supplement (one portion)",
+          "auto_calibration": "Automatic passive calibration"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "intake_today": {
+        "name": "Intake today"
+      },
+      "intake_yesterday": {
+        "name": "Intake yesterday"
+      },
+      "bowl_weight": {
+        "name": "Bowl weight"
+      },
+      "configured_weight": {
+        "name": "Configured portion weight"
+      },
+      "calibration_weight": {
+        "name": "Reference portion weight"
+      },
+      "estimated_distributed": {
+        "name": "Estimated distributed today"
+      },
+      "forecast": {
+        "name": "Forecast total distribution"
+      },
+      "budget": {
+        "name": "Estimated supplement budget"
+      },
+      "target": {
+        "name": "Daily target"
+      },
+      "meals_today": {
+        "name": "Eating events today"
+      },
+      "meals_yesterday": {
+        "name": "Eating events yesterday"
+      },
+      "portions_today": {
+        "name": "Portions today"
+      },
+      "portions_yesterday": {
+        "name": "Portions yesterday"
+      },
+      "supplement_remaining": {
+        "name": "Remaining supplement portions"
+      },
+      "remaining_portions": {
+        "name": "Remaining scheduled portions"
+      },
+      "suggested_portions": {
+        "name": "Simulated extra portions"
+      },
+      "device_status": {
+        "name": "Device status"
+      },
+      "warning_mask": {
+        "name": "Warning mask"
+      },
+      "fault_mask": {
+        "name": "Fault mask"
+      },
+      "feeding_mode": {
+        "name": "Feeding mode"
+      },
+      "sd_card_status": {
+        "name": "SD card status"
+      },
+      "decision": {
+        "name": "Simulated decision",
+        "state": {
+          "unavailable": "Data unavailable",
+          "schedule_uncertain": "Schedule uncertain",
+          "device_not_ready": "Device not ready",
+          "budget_reached": "Budget reached",
+          "meal_soon": "Scheduled meal soon",
+          "bowl_not_empty": "Bowl not empty",
+          "would_feed": "Would feed (simulation)"
+        }
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "desiccant_days": {
+        "name": "Desiccant remaining life"
+      },
+      "measured_weight": {
+        "name": "Calibrated portion weight"
+      },
+      "calibration_samples": {
+        "name": "Calibration samples"
+      },
+      "status_text": {
+        "name": "Feeder status",
+        "state": {
+          "idle": "Idle",
+          "feeding": "Dispensing kibble",
+          "supplements": "Dispensing supplements",
+          "fault": "Device fault",
+          "food_fault": "Kibble fault",
+          "supplement_fault": "Supplement fault",
+          "unknown": "Unknown status"
+        }
+      },
+      "manual_state": {
+        "name": "Manual supplement permission",
+        "state": {
+          "disabled": "Disabled",
+          "pending": "Command awaiting verification",
+          "cooldown": "Cooldown",
+          "blocked": "Conditions not met",
+          "ready": "Ready"
+        }
+      },
+      "manual_result": {
+        "name": "Last manual command result",
+        "state": {
+          "none": "No command",
+          "pending": "Pending",
+          "confirmed": "Counter confirmed",
+          "uncertain": "Uncertain result",
+          "acknowledged": "Manually acknowledged"
+        }
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      },
+      "battery_present": {
+        "name": "Batteries present"
+      },
+      "child_lock": {
+        "name": "Child lock"
+      },
+      "camera_enabled": {
+        "name": "Camera enabled"
+      },
+      "simulation": {
+        "name": "Simulation mode"
+      },
+      "has_warning": {
+        "name": "Active warning"
+      },
+      "has_fault": {
+        "name": "Active fault"
+      },
+      "calibration_enabled": {
+        "name": "Passive calibration"
+      },
+      "manual_enabled": {
+        "name": "Manual supplement enabled"
+      },
+      "manual_pending": {
+        "name": "Command awaiting verification"
+      }
+    },
+    "number": {
+      "target_setting": {
+        "name": "Daily target setting"
+      },
+      "reference_setting": {
+        "name": "Reference weight setting"
+      },
+      "threshold_setting": {
+        "name": "Bowl threshold setting"
+      },
+      "max_setting": {
+        "name": "Maximum portions setting"
+      }
+    },
+    "button": {
+      "feed_one": {
+        "name": "Dispense one portion (supplement)"
+      },
+      "reset_calibration": {
+        "name": "Reset calibration"
+      },
+      "acknowledge_manual": {
+        "name": "Unlock after physical verification"
+      }
+    }
+  }
+}
