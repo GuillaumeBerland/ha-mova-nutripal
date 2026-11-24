@@ -15,6 +15,7 @@ from .cloud_video import VideoAuthorizationCache, VideoCancelled, VideoError
 
 _LOGGER = logging.getLogger(__name__)
 SNAPSHOT_GRACE = 0.75
+IMAGE_CACHE_SECONDS = 30
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -38,6 +39,7 @@ class NutriPalCamera(Camera):
         self._task = None
         self._last_attempt = 0.0
         self._last_image = None
+        self._last_image_at = 0.0
         self._closing = False
         self._relay = None
         self._authorization_cache = VideoAuthorizationCache()
@@ -76,20 +78,38 @@ class NutriPalCamera(Camera):
         # early, not only after the relay receives the GET.
         return self._relay.active or (self.stream is not None and bool(self.stream.outputs()))
 
-    async def _live_image(self, width=None, height=None):
-        if self.stream is not None:
-            try:
-                image = await self.stream.async_get_image(
-                    width=width, height=height, wait_for_next_keyframe=False)
-                if self.available and image:
-                    self._last_image = image
-                    self._last_attempt = time.monotonic()
-                    return image
-            except Exception:
-                _LOGGER.debug("NutriPal live keyframe not available")
-        if self.available and self._last_attempt and time.monotonic() - self._last_attempt < 30:
+    def _cached_image(self):
+        if (self.available and self._last_image is not None
+                and time.monotonic() - self._last_image_at < IMAGE_CACHE_SECONDS):
             return self._last_image
         return None
+
+    def _remember_image(self, image):
+        self._last_image = image
+        self._last_image_at = time.monotonic()
+
+    async def _live_image(self, width=None, height=None):
+        # Stream.async_get_image() creates an HLS provider and starts the
+        # worker, including during teardown. Read the existing converter only.
+        # This is a private HA interface: if unavailable, never fall back to
+        # the public method or open a second native session for a poster.
+        if self._relay.active and self.stream is not None:
+            converter = getattr(self.stream, "_keyframe_converter", None)
+            get_image = getattr(converter, "async_get_image", None)
+            if callable(get_image):
+                try:
+                    image = await get_image(
+                        width=width, height=height, wait_for_next_keyframe=False)
+                    if self.available and image:
+                        # HA can return its previous JPEG without a new packet.
+                        # Repeated identical results must not extend our cache.
+                        if self._relay.active and image != self._last_image:
+                            self._remember_image(image)
+                        if self._relay.active:
+                            return image
+                except Exception:
+                    _LOGGER.debug("NutriPal passive live keyframe not available")
+        return self._cached_image()
 
     async def _capture(self):
         # A poster request often arrives just before HA requests HLS. Give
@@ -107,7 +127,7 @@ class NutriPalCamera(Camera):
                                 authorization_cache=self._authorization_cache),
                         cancellable=True))
             if self.available and self.hass.is_running:
-                self._last_image = image
+                self._remember_image(image)
                 return image
             return None
         except VideoCancelled:
@@ -144,8 +164,11 @@ class NutriPalCamera(Camera):
         if self._task is not None and not self._task.done():
             return await asyncio.shield(self._task)
         # Avoid repeated logins/session startup from an automatic thumbnail refresh.
-        if self._last_attempt and time.monotonic() - self._last_attempt < 30:
-            return self._last_image
+        cached = self._cached_image()
+        if cached is not None:
+            return cached
+        if self._last_attempt and time.monotonic() - self._last_attempt < IMAGE_CACHE_SECONDS:
+            return None
         self._last_image = None
         self._task = self.hass.async_create_task(self._capture())
         return await asyncio.shield(self._task)

@@ -157,8 +157,11 @@ class PriorityTests(unittest.IsolatedAsyncioTestCase):
             async_add_executor_job=AsyncMock(return_value=b'jpeg'), async_create_task=asyncio.create_task)
 
     def stream(self):
+        self.camera._relay.active = True
         return types.SimpleNamespace(outputs=lambda: {'hls': object()},
-            async_get_image=AsyncMock(return_value=b'live-jpeg'))
+            async_get_image=AsyncMock(side_effect=AssertionError('would start HLS')),
+            _keyframe_converter=types.SimpleNamespace(
+                async_get_image=AsyncMock(return_value=b'live-jpeg')))
 
     async def test_provider_starting_uses_live_keyframe(self):
         self.camera.stream = self.stream()
@@ -198,6 +201,7 @@ class PriorityTests(unittest.IsolatedAsyncioTestCase):
         self.camera.stream = self.stream()
         self.assertEqual(await self.camera.async_camera_image(), b'live-jpeg')
         self.camera.stream = None
+        self.camera._relay.active = False
         self.assertEqual(await self.camera.async_camera_image(), b'live-jpeg')
         self.camera.hass.async_add_executor_job.assert_not_awaited()
 

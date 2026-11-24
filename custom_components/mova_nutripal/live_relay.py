@@ -3,7 +3,7 @@ from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import logging
 import secrets
-from threading import Event, Lock, Thread
+from threading import Condition, Event, Lock, Thread
 from time import monotonic
 
 from .cloud_video import VideoCancelled, VideoError
@@ -11,6 +11,7 @@ from .video import iter_enhanced_flv
 from .transcode import iter_h264_flv
 
 START_WAIT = 12
+RECONNECT_WAIT = 1.0
 FAILURE_BACKOFF = 60
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class LiveRelay:
         self._invalidate_authorization = invalidate_authorization
         self._path = "/" + secrets.token_urlsafe(24) + "/live.flv"
         self._state = Lock()
+        self._state_changed = Condition(self._state)
         self._gate = Lock()
         self._active = Event()
         self._stopped = None
@@ -75,6 +77,7 @@ class LiveRelay:
                     self._stopped.set()
                 if self._invalidate_authorization is not None:
                     self._invalidate_authorization()
+                self._state_changed.notify_all()
 
     def start(self):
         """Bind only the loopback interface; no device requests here."""
@@ -111,6 +114,7 @@ class LiveRelay:
             self._retry_after = monotonic() + FAILURE_BACKOFF
             if self._invalidate_authorization is not None:
                 self._invalidate_authorization()
+            self._state_changed.notify_all()
 
     def capture(self, fn, *, cancellable=False):
         """Do not start a snapshot while a live reader is waiting or active."""
@@ -146,7 +150,19 @@ class LiveRelay:
             handler.send_error(404)
             return
         stopped = Event()
-        with self._state:
+        request_started = monotonic()
+        with self._state_changed:
+            # HA can close its worker and open another socket before the
+            # previous relay has released the native session. Allow a short
+            # handoff, without evicting a genuine active viewer.
+            if (self._active.is_set() and self._enabled and not self._closed
+                    and not self._cleanup_failed and monotonic() >= self._retry_after):
+                _LOGGER.debug("NutriPal live request waiting for previous relay cleanup")
+                self._state_changed.wait_for(
+                    lambda: (not self._active.is_set() or not self._enabled
+                             or self._closed or self._cleanup_failed
+                             or monotonic() < self._retry_after),
+                    timeout=RECONNECT_WAIT)
             if self._cleanup_failed:
                 refusal = "cleanup_failed"
             elif not self._enabled or self._closed:
@@ -167,7 +183,6 @@ class LiveRelay:
             handler.send_error(503)
             return
         acquired = started = False
-        request_started = monotonic()
         try:
             acquired = self._gate.acquire(timeout=START_WAIT)
             if not acquired:
@@ -233,6 +248,7 @@ class LiveRelay:
                 self._active.clear()
                 if acquired:
                     self._gate.release()
+                self._state_changed.notify_all()
             handler.close_connection = True
 
     def close(self):
@@ -248,6 +264,7 @@ class LiveRelay:
                 self._stopped.set()
             server, thread = self._server, self._thread
             self._server = self._thread = None
+            self._state_changed.notify_all()
         if server is not None:
             server.shutdown()
             server.server_close()

@@ -237,7 +237,9 @@ class CameraHandoffTests(unittest.IsolatedAsyncioTestCase):
         async def executor(*_):
             self.camera._relay.active = True
             self.camera.stream = type('Stream', (), {})()
-            self.camera.stream.async_get_image = unittest.mock.AsyncMock(return_value=b'live-jpeg')
+            self.camera.stream.async_get_image = unittest.mock.AsyncMock(side_effect=AssertionError('would start HLS'))
+            self.camera.stream._keyframe_converter = type('Converter', (), {})()
+            self.camera.stream._keyframe_converter.async_get_image = unittest.mock.AsyncMock(return_value=b'live-jpeg')
             raise VideoCancelled('snapshot_cancelled')
         self.camera.hass.async_add_executor_job.side_effect = executor
         with patch.object(self.module, 'SNAPSHOT_GRACE', 0):
