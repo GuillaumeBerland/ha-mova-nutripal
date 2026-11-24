@@ -62,7 +62,7 @@ def find_entities(registry, device=None):
 # Labels belong to the generated view only; registry names and IDs are unchanged.
 LABELS = {
     'bowl_weight': ('Dans le bol', 'In the bowl'),
-    'intake_today': ('Mangé ce jour', 'Eaten today'),
+    'intake_today': ('Mangé aujourd’hui', 'Eaten today'),
     'intake_yesterday': ('Mangé hier', 'Eaten yesterday'),
     'estimated_distributed': ('Distribué (est.)', 'Dispensed (est.)'),
     'next_meal': ('Prochain repas', 'Next meal'),
@@ -105,131 +105,160 @@ def _markdown(content, entities):
 
 
 def distribution_progress(e, lang):
-    """Live estimate only; never use missing values as zero or cap the number."""
+    """Show actual estimate and reserved scheduled estimate, not intake."""
     fr = lang == 'fr'
-    title = 'Distribution du jour (est.)' if fr else 'Today’s dispensing (est.)'
-    missing = 'Données indisponibles' if fr else 'Data unavailable'
-    distributed, target = e['estimated_distributed'], e['target']
+    d, f, t, mode = (e[key] for key in ('estimated_distributed', 'forecast', 'target', 'simulation'))
+    def tr(french, english):
+        return french if fr else english
     content = "\n".join([
-        "{% set d = states('" + distributed + "') %}",
-        "{% set t = states('" + target + "') %}",
-        "{% set du = state_attr('" + distributed + "', 'unit_of_measurement') %}",
-        "{% set tu = state_attr('" + target + "', 'unit_of_measurement') %}",
-        f'**{title}**',
-        "{% if is_number(d) and is_number(t) and d|float >= 0 and t|float > 0 and du and du == tu %}",
-        "{% set percent = (100 * (d|float) / (t|float)) %}",
-        "{% set filled = [[(percent / 10)|int, 0]|max, 10]|min %}",
-        "### {{ '%g'|format(d|float) }} / {{ '%g'|format(t|float) }} {{ du }}",
-        "{{ '▰' * filled }}{{ '▱' * (10 - filled) }} **{{ percent|round(0)|int }} %**",
-        "{% else %}", missing, "{% endif %}",
+        "{% set d = states('" + d + "') | float(none) %}",
+        "{% set f = states('" + f + "') | float(none) %}",
+        "{% set t = states('" + t + "') | float(none) %}",
+        "{% set du = state_attr('" + d + "', 'unit_of_measurement') %}",
+        "{% set fu = state_attr('" + f + "', 'unit_of_measurement') %}",
+        "{% set tu = state_attr('" + t + "', 'unit_of_measurement') %}",
+        "{% if is_state('" + mode + "', 'on') %}",
+        tr('**Simulation uniquement** · Distribution totale', '**Simulation only** · Total dispensing'),
+        "{% else %}", tr('⚠️ **Mode simulation non confirmé**', '⚠️ **Simulation mode not confirmed**'), "{% endif %}",
+        "{% if is_number(d) and is_number(t) and d >= 0 and t > 0 and du and du == tu %}",
+        "\n## {{ '%g'|format(d|round(1)) }} / {{ '%g'|format(t|round(1)) }} {{ du }}\n",
+        "{% set blue = [[(10 * d / t)|int, 0]|max, 10]|min %}",
+        "{% if is_number(f) and f >= d and fu == du %}",
+        "{% set filled = [[(10 * f / t)|int, blue]|max, 10]|min %}",
+        "{{ '🟦' * blue }}{{ '🟧' * (filled - blue) }}{{ '⬜' * (10 - filled) }}\n",
+        tr('🟦 Déjà distribué (est.) :', '🟦 Already dispensed (est.):') + " **{{ '%g'|format(d|round(1)) }} {{ du }}**\n",
+        tr('🟧 Repas restants (est.) :', '🟧 Remaining meals (est.):') + " **{{ '%g'|format((f - d)|round(1)) }} {{ du }}**\n",
+        tr('Prévision :', 'Forecast:') + " **{{ '%g'|format(f|round(1)) }} {{ du }} ({{ (100 * f / t)|round(0)|int }} %)**\n",
+        "{% if f > t %}", tr('⚠️ Objectif dépassé en prévision de **{{ (f - t)|round(1) }} {{ du }}**.', '⚠️ Forecast exceeds target by **{{ (f - t)|round(1) }} {{ du }}**.'),
+        "{% elif f < t %}", tr('Écart restant à l’objectif : **{{ (t - f)|round(1) }} {{ du }}**.', 'Remaining gap to target: **{{ (t - f)|round(1) }} {{ du }}**.'),
+        "{% else %}", tr('Objectif atteint en prévision.', 'Forecast meets target.'), "{% endif %}",
+        "{% else %}", "{{ '🟦' * blue }}{{ '⬜' * (10 - blue) }}\n", tr('Prévision indisponible.', 'Forecast unavailable.'), "{% endif %}",
+        "{% else %}", tr('Données indisponibles ou incohérentes.', 'Data unavailable or inconsistent.'), "{% endif %}",
     ])
-    return _markdown(content, [distributed, target])
+    return dict(_markdown(content, [d, f, t, mode]), title=tr('Distribution journalière', 'Daily dispensing'))
 
 
 def next_meal_card(e, lang):
-    """Show the actual HA-local date/time and a countdown, without guessing."""
+    """Scheduled time and estimated grams, with no invented missing values."""
     fr = lang == 'fr'
-    meal, portions = e['next_meal'], e['next_meal_portions']
-    title = 'Prochain repas programmé' if fr else 'Next scheduled meal'
+    meal, portions, weight = (e[key] for key in ('next_meal', 'next_meal_portions', 'calibration_weight'))
+    def tr(french, english):
+        return french if fr else english
     date_format = '%d/%m %H:%M' if fr else '%Y-%m-%d %H:%M'
-    unavailable = 'Programme indisponible' if fr else 'Schedule unavailable'
-    overdue = 'Horaire dépassé — à vérifier' if fr else 'Scheduled time passed — check feeder'
-    countdown = "Dans {{ minutes // 60 }} h {{ '%02d'|format(minutes % 60) }} min" if fr else "In {{ minutes // 60 }} h {{ '%02d'|format(minutes % 60) }} min"
-    shortly = 'Dans {{ minutes }} min' if fr else 'In {{ minutes }} min'
-    portions_unknown = 'Quantité indisponible' if fr else 'Portions unavailable'
     content = "\n".join([
         "{% set meal = as_datetime(states('" + meal + "'), default=none) %}",
-        "{% set portions = states('" + portions + "') %}",
-        '<ha-icon icon="mdi:calendar-clock"></ha-icon> **' + title + '**',
+        "{% set portions = states('" + portions + "') | float(none) %}",
+        "{% set weight = states('" + weight + "') | float(none) %}",
+        "{% set unit = state_attr('" + weight + "', 'unit_of_measurement') %}",
         "{% if meal is not none %}",
         "{% set local = as_local(meal) %}",
         "{% set seconds = as_timestamp(meal) - as_timestamp(now()) %}",
-        "### {{ local.strftime('" + date_format + "') }}",
+        "## 🕒 {{ local.strftime('" + date_format + "') }}\n",
         "{% if seconds >= 0 %}",
         "{% set minutes = ((seconds + 59) // 60)|int %}",
-        "{% if minutes >= 60 %}" + countdown + "{% else %}" + shortly + "{% endif %}",
-        "{% else %}" + overdue + "{% endif %}",
-        "{% if is_number(portions) and portions|float > 0 and portions|float == portions|int %}",
-        " · **{{ portions|int }} portion{% if portions|int != 1 %}s{% endif %}**",
-        "{% else %} · " + portions_unknown + "{% endif %}",
-        "{% else %}", unavailable, "{% endif %}",
+        "{% if minutes >= 60 %}" + tr("Dans {{ minutes // 60 }} h {{ '%02d'|format(minutes % 60) }} min", "In {{ minutes // 60 }} h {{ '%02d'|format(minutes % 60) }} min") + "{% else %}" + tr('Dans {{ minutes }} min', 'In {{ minutes }} min') + "{% endif %}\n",
+        "{% else %}", tr('⚠️ Horaire dépassé — à vérifier', '⚠️ Scheduled time passed — check feeder'), "{% endif %}",
+        "{% if is_number(portions) and portions > 0 and portions == portions|int %}",
+        "**{{ portions|int }} portion{% if portions|int != 1 %}s{% endif %}**{% if is_number(weight) and weight > 0 and unit == 'g' %} · **{{ '%g'|format((portions * weight)|round(1)) }} g** " + tr('estimés', 'estimated') + "{% endif %}",
+        "{% else %}", tr('Quantité indisponible', 'Portions unavailable'), "{% endif %}",
+        "{% else %}", tr('Programme indisponible', 'Schedule unavailable'), "{% endif %}",
     ])
-    # No entity_id restriction here: now() must also refresh the countdown.
-    return {'type': 'markdown', 'content': content}
+    # now() must refresh the countdown; do not restrict updates to entities.
+    return {'type': 'markdown', 'title': tr('Prochain repas', 'Next meal'), 'content': content}
+
+
+def calibration_card(e, lang):
+    """Initial three-sample threshold; never imply calibration if disabled."""
+    fr = lang == 'fr'
+    samples, enabled, measured = (e[key] for key in ('calibration_samples', 'calibration_enabled', 'measured_weight'))
+    def tr(french, english):
+        return french if fr else english
+    content = "\n".join([
+        "{% set n = states('" + samples + "') | int(none) %}",
+        "{% set enabled = states('" + enabled + "') %}",
+        "{% set measured = states('" + measured + "') | float(none) %}",
+        "{% if enabled == 'off' %}", tr('**Calibration désactivée**', '**Calibration disabled**'),
+        "{% elif enabled != 'on' %}", tr('État de calibration indisponible.', 'Calibration status unavailable.'),
+        "{% elif n is none or n < 0 %}", tr('Nombre de mesures indisponible.', 'Sample count unavailable.'),
+        "{% elif n < 3 %}",
+        tr('## {{ n }} / 3 mesures initiales', '## {{ n }} / 3 initial samples') + "\n",
+        "{{ '🟪' * n }}{{ '⬜' * (3 - n) }}\n",
+        tr('Poids de référence utilisé en attendant trois mesures valides.', 'Reference weight used until three valid samples.'),
+        "{% elif is_number(measured) and measured > 0 %}",
+        tr('## {{ n }} mesures valides', '## {{ n }} valid samples') + "\n",
+        tr('🟪🟪🟪 · Minimum initial atteint', '🟪🟪🟪 · Initial minimum reached') + "\n",
+        tr('Médiane mesurée :', 'Measured median:') + " **{{ '%g'|format(measured|round(2)) }} g**",
+        "{% else %}", tr('Minimum initial atteint · médiane indisponible.', 'Initial minimum reached · median unavailable.'), "{% endif %}",
+    ])
+    return dict(_markdown(content, [samples, enabled, measured]), title=tr('Calibration passive', 'Passive calibration'))
 
 
 def health_card(e, lang):
     """Unknown/disconnected data must never be reported as healthy."""
     fr = lang == 'fr'
-    online, warning, fault = (e[key] for key in ('online', 'has_warning', 'has_fault'))
-    def message(icon, french, english):
-        return f'<ha-icon icon="mdi:{icon}"></ha-icon> **{french if fr else english}**'
+    online, warning, fault, pending = (e[key] for key in ('online', 'has_warning', 'has_fault', 'manual_pending'))
+    def message(symbol, french, english):
+        return f'{symbol} **{french if fr else english}**'
     content = "\n".join([
         "{% set online = states('" + online + "') %}",
         "{% set warning = states('" + warning + "') %}",
         "{% set fault = states('" + fault + "') %}",
-        "{% if online == 'off' %}", message('wifi-off', 'Hors ligne', 'Offline'),
-        "{% elif online != 'on' %}", message('help-circle-outline', 'État indisponible', 'Status unavailable'),
-        "{% elif fault == 'on' %}", message('alert-octagon', 'Défaut actif', 'Active fault'),
-        "{% elif warning == 'on' %}", message('alert', 'Alerte active', 'Active warning'),
-        "{% elif fault == 'off' and warning == 'off' %}", message('shield-check-outline', 'En ligne · aucune alerte ni défaut', 'Online · no warning or fault'),
-        "{% else %}", message('help-circle-outline', 'État à vérifier', 'Status needs checking'),
+        "{% set pending = states('" + pending + "') %}",
+        "{% if pending == 'on' %}", message('🔴', 'Commande à vérifier', 'Command needs verification'),
+        "{% elif fault == 'on' %}", message('🔴', 'Défaut actif', 'Active fault'),
+        "{% elif online == 'off' %}", message('🟠', 'Hors ligne', 'Offline'),
+        "{% elif warning == 'on' %}", message('🟠', 'Alerte active', 'Active warning'),
+        "{% elif online == 'on' and fault == 'off' and warning == 'off' and pending == 'off' %}", message('🟢', 'En ligne — aucune alerte ni défaut', 'Online — no warning or fault'),
+        "{% else %}", message('⚪', 'État à vérifier', 'Status needs checking'),
         "{% endif %}",
     ])
-    return _markdown(content, [online, warning, fault])
+    return dict(_markdown(content, [online, warning, fault, pending]), title='État du distributeur' if fr else 'Feeder status')
 
 
 def _groups(e, lang):
-    """Return reusable sections without write actions or automatic camera requests."""
+    """Three thematic columns, with visual summaries and read-only details."""
     fr = lang == 'fr'
     def tr(french, english):
         return french if fr else english
     def name(key):
         return LABELS[key][0 if fr else 1]
     def tile(key):
-        # Do not override the integration's state-based icons or theme colors.
         card = {'type': 'tile', 'entity': e[key], 'name': name(key),
                 'tap_action': {'action': 'more-info'}, 'icon_tap_action': {'action': 'more-info'}}
         if key == 'camera_snapshot':
-            card['show_entity_picture'] = False
-            card['hide_state'] = True
-            card['icon'] = 'mdi:cctv'
+            card.update(show_entity_picture=False, hide_state=True, icon='mdi:cctv')
         return card
     def grid(keys):
         return {'type': 'grid', 'columns': 2, 'square': False,
                 'cards': [tile(key) for key in keys if key in e]}
-    def rows(keys):
-        return {'type': 'entities', 'show_header_toggle': False,
+    def rows(keys, title=None):
+        card = {'type': 'entities', 'show_header_toggle': False,
                 'entities': [{'entity': e[key], 'name': name(key)} for key in keys if key in e]}
+        if title:
+            card['title'] = title
+        return card
     def history(title, hours, keys):
         return {'type': 'history-graph', 'title': title, 'hours_to_show': hours,
                 'entities': [{'entity': e[key], 'name': name(key)} for key in keys]}
-    feeder = []
+    feeding = [grid(('bowl_weight', 'intake_today', 'estimated_distributed', 'intake_yesterday')),
+               next_meal_card(e, lang),
+               rows(('remaining_portions', 'meals_today', 'portions_today')),
+               history(tr('Poids du bol · 24 h', 'Bowl weight · 24 h'), 24, ('bowl_weight',))]
     if 'camera_snapshot' in e:
-        feeder.append(tile('camera_snapshot'))
-    feeder += [health_card(e, lang), grid(('online', 'status_text', 'has_warning', 'has_fault')),
-               rows(('desiccant_days', 'battery_present', 'battery', 'child_lock', 'camera_enabled'))]
+        feeding.append(tile('camera_snapshot'))
     return [
-        (tr('Alimentation', 'Feeding'), 'mdi:bowl-mix-outline', [
-            grid(('bowl_weight', 'intake_today', 'estimated_distributed', 'intake_yesterday')),
-            next_meal_card(e, lang), distribution_progress(e, lang),
-            rows(('remaining_portions', 'meals_today', 'portions_today')),
-        ]),
-        (tr('Distributeur', 'Feeder'), 'mdi:cctv' if 'camera_snapshot' in e else 'mdi:shield-check-outline', feeder),
-        (tr('Régulation hybride — simulation', 'Hybrid regulation — simulation'), 'mdi:flask-outline', [
-            {'type': 'markdown', 'content': tr('**Simulation uniquement.** Objectif de distribution totale, pas de consommation individuelle.', '**Simulation only.** Total dispensing target, not individual intake.')},
-            grid(('simulation', 'target', 'forecast', 'budget')),
-            rows(('suggested_portions', 'decision')),
-            {'type': 'markdown', 'content': tr('### Calibration passive', '### Passive calibration'), 'text_only': True},
-            grid(('calibration_weight', 'calibration_samples')),
-            rows(('calibration_enabled', 'configured_weight', 'measured_weight')),
-        ]),
-        (tr('Historique', 'History'), 'mdi:chart-line', [
-            history(tr('Poids du bol · 24 h', 'Bowl weight · 24 h'), 24, ('bowl_weight',)),
+        (tr('Alimentation', 'Feeding'), 'mdi:paw', feeding),
+        (tr('Régulation hybride', 'Hybrid regulation'), 'mdi:chart-donut', [
+            distribution_progress(e, lang),
+            rows(('simulation', 'budget', 'suggested_portions', 'decision'), tr('Complément simulé', 'Simulated supplement')),
             history(tr('Croquettes · 48 h', 'Kibble · 48 h'), 48, ('intake_today', 'estimated_distributed')),
         ]),
-        (tr('Complément manuel', 'Manual supplement'), 'mdi:shield-check-outline', [
-            rows(('manual_enabled', 'manual_state', 'manual_pending', 'manual_result')),
+        (tr('Calibration et entretien', 'Calibration and maintenance'), 'mdi:cog-outline', [
+            calibration_card(e, lang),
+            rows(('calibration_enabled', 'configured_weight', 'calibration_weight', 'measured_weight')),
+            health_card(e, lang),
+            rows(('online', 'status_text', 'has_warning', 'has_fault', 'desiccant_days', 'battery_present', 'battery', 'child_lock', 'camera_enabled')),
+            rows(('manual_enabled', 'manual_state', 'manual_pending', 'manual_result'), tr('Complément manuel', 'Manual supplement')),
         ]),
     ]
 
@@ -244,23 +273,15 @@ def make_card(e, lang='fr'):
 
 
 def make_dashboard(e, lang='fr', title='MOVA NutriPal'):
-    """Three balanced sections, then two graphs and manual status."""
-    sections = []
-    for heading, icon, cards in _groups(e, lang):
-        history = bool(cards) and all(card['type'] == 'history-graph' for card in cards)
-        section = {'type': 'grid', 'cards': [
-            {'type': 'heading', 'heading': heading, 'icon': icon},
-            *[dict(card, grid_options={'columns': 12 if history else 'full'}) for card in cards],
-        ]}
-        if history:
-            # Native section grid: 12 columns per section; on a narrow screen
-            # the two full-width graphs stack instead of shrinking their axes.
-            section['column_span'] = 2
-        sections.append(section)
+    """Keep the three thematic sections in order on narrow screens."""
+    sections = [{'type': 'grid', 'cards': [
+        {'type': 'heading', 'heading': heading, 'icon': icon, 'heading_style': 'title'},
+        *[dict(card, grid_options={'columns': 'full'}) for card in cards],
+    ]} for heading, icon, cards in _groups(e, lang)]
     return {'title': title, 'views': [{
         'title': 'Alimentation' if lang == 'fr' else 'Feeding',
         'path': 'feeding', 'icon': 'mdi:paw', 'type': 'sections',
-        'max_columns': 3, 'sections': sections,
+        'max_columns': 3, 'dense_section_placement': False, 'sections': sections,
     }]}
 
 

@@ -41,11 +41,10 @@ class DashboardLayoutTests(unittest.TestCase):
         view = result['views'][0]
         self.assertEqual(view['type'], 'sections')
         self.assertEqual(view['max_columns'], 3)
-        self.assertEqual(len(view['sections']), 5)
+        self.assertEqual(len(view['sections']), 3)
         self.assertEqual([section['cards'][0]['heading'] for section in view['sections']],
-                         ['Alimentation', 'Distributeur', 'Régulation hybride — simulation', 'Historique', 'Complément manuel'])
-        self.assertEqual(view['sections'][3]['column_span'], 2)
-        self.assertTrue(all(c['grid_options']['columns'] == 12 for c in view['sections'][3]['cards'][1:]))
+                         ['Alimentation', 'Régulation hybride', 'Calibration et entretien'])
+        self.assertTrue(all(c['grid_options']['columns'] == 'full' for section in view['sections'] for c in section['cards'][1:]))
         self.assertTrue(all(section['cards'][0]['type'] == 'heading' for section in view['sections']))
 
     def test_optional_camera_does_not_autoplay_or_fetch_thumbnail(self):
@@ -66,7 +65,7 @@ class DashboardLayoutTests(unittest.TestCase):
         e = dashboard.find_entities(r)
         self.assertNotIn('camera_snapshot', e)
         self.assertNotIn('camera.', json.dumps(dashboard.make_dashboard(e)))
-        self.assertEqual(len(dashboard.make_dashboard(dashboard.find_entities(registry(False)))['views'][0]['sections']), 5)
+        self.assertEqual(len(dashboard.make_dashboard(dashboard.find_entities(registry(False)))['views'][0]['sections']), 3)
 
     def test_camera_from_other_feeder_is_not_used(self):
         r = registry(False)
@@ -90,8 +89,8 @@ class DashboardLayoutTests(unittest.TestCase):
         result = dashboard.make_dashboard(dashboard.find_entities(registry()), 'en')
         headings = [c['heading'] for c in cards(result) if c['type'] == 'heading']
         self.assertIn('Feeding', headings)
-        self.assertIn('Feeder', headings)
-        self.assertIn('Hybrid regulation — simulation', headings)
+        self.assertIn('Calibration and maintenance', headings)
+        self.assertIn('Hybrid regulation', headings)
         self.assertEqual(sorted(c['hours_to_show'] for c in cards(result) if c['type'] == 'history-graph'), [24, 48])
 
     def test_cli_preserves_single_card_default_and_supports_full_dashboard(self):
@@ -107,36 +106,41 @@ class DashboardLayoutTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'bowl_weight'):
             dashboard.find_entities(r)
 
-    def test_camera_and_status_share_section(self):
+    def test_camera_in_feeding_and_health_in_maintenance(self):
         e = dashboard.find_entities(registry())
-        feeder = dashboard.make_dashboard(e)['views'][0]['sections'][1]
-        self.assertEqual(feeder['cards'][0]['heading'], 'Distributeur')
-        self.assertTrue(any(c.get('entity') == e['camera_snapshot'] for c in cards(feeder)))
-        self.assertTrue(any(c.get('entity') == e['online'] for c in cards(feeder)))
+        feeding, _, maintenance = dashboard.make_dashboard(e)['views'][0]['sections']
+        self.assertTrue(any(c.get('entity') == e['camera_snapshot'] for c in cards(feeding)))
+        self.assertIn(e['online'], json.dumps(maintenance))
 
-    def test_progress_uses_distribution_and_target_not_intake(self):
+    def test_progress_uses_distribution_forecast_and_target_not_intake(self):
         e = dashboard.find_entities(registry())
         for lang in ('fr', 'en'):
             c = dashboard.distribution_progress(e, lang)
-            self.assertEqual(c['entity_id'], [e['estimated_distributed'], e['target']])
-            self.assertIn('is_number(d)', c['content'])
-            self.assertIn('t|float > 0', c['content'])
-            self.assertIn('du == tu', c['content'])
-            self.assertIn('percent|round(0)|int', c['content'])
+            self.assertEqual(c['entity_id'], [e[k] for k in ('estimated_distributed', 'forecast', 'target', 'simulation')])
+            for term in ('is_number(d)', 't > 0', 'du == tu', 'fu == du', 'f >= d', 'f - d', '100 * f / t', '🟦', '🟧', '⬜'):
+                self.assertIn(term, c['content'])
             self.assertNotIn(e['intake_today'], c['content'])
+
+    def test_calibration_summary(self):
+        e = dashboard.find_entities(registry())
+        for lang in ('fr', 'en'):
+            c = dashboard.calibration_card(e, lang)
+            self.assertEqual(c['entity_id'], [e[k] for k in ('calibration_samples', 'calibration_enabled', 'measured_weight')])
+            for term in ('n < 3', '3 - n', "enabled == 'off'", 'is_number(measured)', '🟪'):
+                self.assertIn(term, c['content'])
 
     def test_next_meal_uses_time_and_countdown(self):
         e = dashboard.find_entities(registry())
         for lang, date_format in [('fr', '%d/%m %H:%M'), ('en', '%Y-%m-%d %H:%M')]:
             c = dashboard.next_meal_card(e, lang)
             self.assertNotIn('entity_id', c)  # now() keeps the countdown live
-            for term in (e['next_meal'], e['next_meal_portions'], 'as_local(meal)', 'now()', date_format, 'seconds >= 0'):
+            for term in (e['next_meal'], e['next_meal_portions'], e['calibration_weight'], 'as_local(meal)', 'now()', date_format, 'seconds >= 0'):
                 self.assertIn(term, c['content'])
 
     def test_health_summary_checks_unknown_states(self):
         e = dashboard.find_entities(registry())
         c = dashboard.health_card(e, 'fr')
-        self.assertEqual(c['entity_id'], [e['online'], e['has_warning'], e['has_fault']])
-        self.assertIn("online != 'on'", c['content'])
+        self.assertEqual(c['entity_id'], [e['online'], e['has_warning'], e['has_fault'], e['manual_pending']])
+        self.assertIn("pending == 'on'", c['content'])
         self.assertIn("fault == 'off' and warning == 'off'", c['content'])
         self.assertIn('État à vérifier', c['content'])
