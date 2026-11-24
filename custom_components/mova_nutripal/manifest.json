@@ -17,5 +17,8 @@
     "pyOpenSSL>=24"
   ],
   "documentation": "https://github.com/GuillaumeBerland/ha-mova-nutripal",
-  "issue_tracker": "https://github.com/GuillaumeBerland/ha-mova-nutripal/issues"
+  "issue_tracker": "https://github.com/GuillaumeBerland/ha-mova-nutripal/issues",
+  "categories": [
+    "pets"
+  ]
 }
