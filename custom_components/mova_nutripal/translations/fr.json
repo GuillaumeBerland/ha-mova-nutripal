@@ -159,6 +159,12 @@
       },
       "next_meal_portions": {
         "name": "Portions du prochain repas"
+      },
+      "compensated_samples": {
+        "name": "Mesures compensées expérimentales"
+      },
+      "compensated_weight": {
+        "name": "Poids médian compensé expérimental"
       }
     },
     "binary_sensor": {

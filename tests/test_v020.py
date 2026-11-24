@@ -1,4 +1,5 @@
 import importlib.util
+from test_camera_transport import PACKAGE
 from datetime import datetime,timedelta
 from pathlib import Path
 import tempfile
@@ -9,7 +10,7 @@ BASE = Path(__file__).resolve().parents[1] / 'custom_components/mova_nutripal'
 def load(name):
     spec=importlib.util.spec_from_file_location(name,BASE/(name+'.py'))
     mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);return mod
-cal=load('calibration'); ctrl=load('control'); store=load('state_store'); diag=load('diagnostics_text')
+cal=load('calibration'); ctrl=load('control'); store=importlib.import_module(PACKAGE + '.state_store'); diag=load('diagnostics_text')
 
 class CalibrationTest(unittest.TestCase):
     def setUp(self):

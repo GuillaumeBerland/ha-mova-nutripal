@@ -7,10 +7,10 @@ from math import isfinite
 from .const import DOMAIN
 from .entity import NutriPalEntity
 
-GRAMS = ("intake_today", "intake_yesterday", "bowl_weight", "configured_weight", "calibration_weight", "estimated_distributed", "forecast", "budget", "target", "measured_weight")
-COUNTS = ("meals_today", "meals_yesterday", "portions_today", "portions_yesterday", "supplement_remaining", "remaining_portions", "suggested_portions", "calibration_samples")
+GRAMS = ("intake_today", "intake_yesterday", "bowl_weight", "configured_weight", "calibration_weight", "estimated_distributed", "forecast", "budget", "target", "measured_weight", "compensated_weight")
+COUNTS = ("meals_today", "meals_yesterday", "portions_today", "portions_yesterday", "supplement_remaining", "remaining_portions", "suggested_portions", "calibration_samples", "compensated_samples")
 OTHER = ("device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "decision", "battery", "desiccant_days", "status_text", "manual_state", "manual_result", "next_meal", "next_meal_portions")
-DIAGNOSTIC = {"device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "supplement_remaining", "configured_weight"}
+DIAGNOSTIC = {"device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "supplement_remaining", "configured_weight", "compensated_weight", "compensated_samples"}
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
@@ -78,6 +78,10 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        if self.key == "compensated_samples":
+            return {"diagnostic_only": True, "used_for_feeding": False,
+                    "observation_status": self.coordinator.data.get("compensated_status"),
+                    "observations": self.coordinator.data.get("compensated_history", [])}
         if self.key == "calibration_samples":
             history = self.coordinator.data.get('calibration_history', [])
             return {'assisted_samples': sum(row['source'] == 'assisted' for row in history),

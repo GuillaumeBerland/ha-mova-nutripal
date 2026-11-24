@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import asyncio
 import logging
+from time import monotonic
 from homeassistant.exceptions import HomeAssistantError
 from copy import deepcopy
 from .state_store import (load_state, save_state, append_sample, assisted_measurement,
@@ -11,6 +12,7 @@ from .const import DEFAULTS, DOMAIN
 from .planner import plan
 from .calibration import Calibration, effective_weight, near_meal, number
 from .control import manual_allowed, confirm_pending
+from .compensated import CompensatedCalibration, append_observation, diagnostic_summary
 from .presentation import next_scheduled_meal
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         self.storage_failed = False
         self.state = {'samples': [], 'pending': None, 'last_attempt': 0, 'last_result': 'none'}
         self.cal = Calibration()
+        self.compensated = CompensatedCalibration()
         self.notification_active = None
         self.stopping = False
 
@@ -52,6 +55,10 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         weight = effective_weight(samples, options['portion_weight'], options['auto_calibration'])
         data.update(plan(data, {**options, 'portion_weight': weight}, now))
         data['calibration_history'] = calibration_history(self.state)
+        records = self.state.get('compensated_records', [])
+        data.update(diagnostic_summary(records))
+        data['compensated_history'] = deepcopy(records)
+        data['compensated_status'] = self.compensated.status
         data.update(target=options['target'], calibration_weight=weight, simulation=True,
                     calibration_samples=len(samples), measured_weight=effective_weight(samples, None) if len(samples)>=3 else None,
                     calibration_enabled=options['auto_calibration'], manual_enabled=options['manual_enabled'],
@@ -93,7 +100,9 @@ class NutriPalCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         async with self.lock:
             try:
+                started = monotonic()
                 data, now = await self._snapshot()
+                duration = monotonic() - started
                 options = self.options
                 pending = self.state['pending']
                 changed = False
@@ -115,6 +124,14 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                         changed = append_sample(self.state, sample, detail) or changed
                 else:
                     self.cal.reset()
+                # Independent experimental observations; never append to calibration samples.
+                if (options['auto_calibration'] and fast and not options['manual_enabled']
+                        and pending is None and self.state['pending'] is None):
+                    record = self.compensated.observe(data, now, duration)
+                    if record is not None:
+                        changed = append_observation(self.state.setdefault('compensated_records', []), record) or changed
+                else:
+                    self.compensated.reset('disabled' if not options['auto_calibration'] else 'waiting')
                 if changed:
                     await self._save()
                 result = self._enrich(data, now)
@@ -125,6 +142,7 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                 return result
             except Exception as exc:
                 self.cal.reset()
+                self.compensated.reset('invalid_reading')
                 raise UpdateFailed(f'MOVA update failed ({type(exc).__name__})') from None
 
     async def async_feed_one(self):

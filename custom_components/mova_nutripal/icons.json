@@ -122,6 +122,12 @@
           "uncertain": "mdi:alert-circle-outline",
           "acknowledged": "mdi:check-decagram-outline"
         }
+      },
+      "compensated_samples": {
+        "default": "mdi:counter"
+      },
+      "compensated_weight": {
+        "default": "mdi:scale-balance"
       }
     },
     "binary_sensor": {

@@ -6,6 +6,7 @@ from pathlib import Path
 from math import isfinite
 from datetime import date, timedelta
 from copy import deepcopy
+from .compensated import MAX_RECORDS, append_observation
 
 
 MAX_SAMPLES = 15
@@ -117,6 +118,14 @@ def load_state(path):
         raise ValueError('Invalid pending command')
     if state['last_result'] not in ('none','pending','confirmed','uncertain','acknowledged'):
         raise ValueError('Invalid command state')
+    # Bad experimental diagnostics must not invalidate the actuator interlock.
+    if 'compensated_records' in state:
+        records = state['compensated_records']
+        clean = []
+        if isinstance(records, list):
+            for record in records[-MAX_RECORDS:]:
+                append_observation(clean, record)
+        state['compensated_records'] = clean
     return state
 
 

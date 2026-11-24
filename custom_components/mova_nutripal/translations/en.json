@@ -159,6 +159,12 @@
       },
       "next_meal_portions": {
         "name": "Next meal portions"
+      },
+      "compensated_samples": {
+        "name": "Experimental compensated measurements"
+      },
+      "compensated_weight": {
+        "name": "Experimental compensated median weight"
       }
     },
     "binary_sensor": {
