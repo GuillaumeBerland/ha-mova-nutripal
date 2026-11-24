@@ -217,6 +217,11 @@
       "acknowledge_manual": {
         "name": "Confirmer la vérification physique"
       }
+    },
+    "calendar": {
+      "meal_calendar": {
+        "name": "Repas programmés"
+      }
     }
   }
 }

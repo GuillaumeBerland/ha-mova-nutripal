@@ -15,6 +15,8 @@ cat /tmp/mova-nutripal-dashboard.yaml
 
 Replace the SSH destination with your own. For English use `--language en`. For a single card use `--format card` (also the default, for compatibility). The script runs locally and reads registry data from standard input; do not upload or share the registry. It resolves actual entity IDs through the existing unique IDs, including renamed entities. For multiple feeders, pass `--device` with the selected HA device registry ID. Missing or disabled required entities are reported; optional entities, including the camera, are omitted rather than guessed.
 
+The complete dashboard optionally adds a second **Scheduled meals** view with the native calendar card when the enabled calendar entity exists for the selected feeder. The single-card format is unchanged. Calendar events are projections, not dispensing history.
+
 ## Install the generated configuration
 
 For a full dashboard, create a **new** empty dashboard in Home Assistant (Settings > Dashboards). Open it, enter edit mode and open the Raw configuration editor from the menu. Paste the generated content, replacing only this new dashboard's configuration, then save. JSON syntax is valid YAML. To preserve an existing dashboard, make a backup or use the single-card format instead: add a Manual card and paste its generated configuration.

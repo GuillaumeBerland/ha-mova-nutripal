@@ -24,6 +24,7 @@ OPTIONAL = {
     'sensor': ('battery', 'meals_today', 'meals_yesterday', 'portions_today', 'portions_yesterday'),
     'binary_sensor': ('battery_present', 'child_lock', 'camera_enabled', 'manual_enabled'),
     'camera': ('camera_snapshot',),
+    'calendar': ('meal_calendar',),
 }
 
 
@@ -278,11 +279,19 @@ def make_dashboard(e, lang='fr', title='MOVA NutriPal'):
         {'type': 'heading', 'heading': heading, 'icon': icon, 'heading_style': 'title'},
         *[dict(card, grid_options={'columns': 'full'}) for card in cards],
     ]} for heading, icon, cards in _groups(e, lang)]
-    return {'title': title, 'views': [{
+    views = [{
         'title': 'Alimentation' if lang == 'fr' else 'Feeding',
         'path': 'feeding', 'icon': 'mdi:paw', 'type': 'sections',
         'max_columns': 3, 'dense_section_placement': False, 'sections': sections,
-    }]}
+    }]
+    if 'meal_calendar' in e:
+        views.append({
+            'title': 'Repas programmés' if lang == 'fr' else 'Scheduled meals',
+            'path': 'meals', 'icon': 'mdi:calendar-clock', 'type': 'panel',
+            'cards': [{'type': 'calendar', 'entities': [e['meal_calendar']],
+                       'initial_view': 'listWeek'}],
+        })
+    return {'title': title, 'views': views}
 
 
 def main():

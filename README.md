@@ -19,6 +19,9 @@ Keep an adequate independent feeding plan, verify that scheduled feeding works w
 ## Installation (HACS)
 After a GitHub release is published, open HACS > Custom repositories and add `https://github.com/GuillaumeBerland/ha-mova-nutripal` as an Integration. Download a release, restart Home Assistant and add MOVA NutriPal in Settings > Devices & services. Existing users: back up HA, update the existing component and restart; do not remove the config entry or stored calibration. Keep manual dispensing disabled until verified. Do not bypass a command lock without checking the feeder physically.
 
+## Scheduled meal calendar
+The native read-only calendar projects the current supported daily kibble schedule for today and the following 59 days. No additional cloud calls, no schedule writes, and no historical reconstruction. Unsupported repeat types, expired or invalid schedules are unavailable rather than guessed. Ambiguous or nonexistent local times during daylight-saving transitions are omitted. Events are one-minute calendar markers, not confirmed dispensing or measured durations. Use the calendar for information, not feeding automation.
+
 ## Dashboard
 A native, read-only dashboard is available in a responsive Sections layout or as a single card. See [dashboard instructions](dashboard/README.md) to generate it with your actual entity IDs (French or English). The optional camera opens on demand; no extra frontend plugin or global theme is required.
 

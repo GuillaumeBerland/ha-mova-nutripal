@@ -220,6 +220,11 @@
       "acknowledge_manual": {
         "default": "mdi:check-decagram-outline"
       }
+    },
+    "calendar": {
+      "meal_calendar": {
+        "default": "mdi:calendar-clock"
+      }
     }
   }
 }

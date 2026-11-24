@@ -90,6 +90,7 @@ class NutriPalAPI:
         if data.get("feeding_mode") is not None:
             schedule = self.call("feeding/plan/queryPlanFinished", {**date_params(now), "planType": data["feeding_mode"]})
             if isinstance(schedule, dict) and isinstance(schedule.get("feedingPlanRespList"), list):
+                data["schedule_date"] = now.date().isoformat()
                 fields = ("feedingTime", "portions", "repeatType", "status", "supperFlag", "expireStatus", "planFinishStatus")
                 data["schedule"] = [{key: row.get(key) for key in fields} for row in schedule["feedingPlanRespList"] if isinstance(row, dict)] if all(isinstance(row, dict) for row in schedule["feedingPlanRespList"]) else None
         if not any(k in data for k in ("intake_today", "device_status", "portions_today")):
