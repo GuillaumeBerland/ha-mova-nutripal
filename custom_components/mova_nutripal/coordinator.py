@@ -14,6 +14,7 @@ from .calibration import Calibration, effective_weight, near_meal, number
 from .control import manual_allowed, confirm_pending
 from .compensated import CompensatedCalibration, append_observation, diagnostic_summary
 from .presentation import next_scheduled_meal
+from .daily_balance import DailyBalance, load_daily
 
 _LOGGER = logging.getLogger(__name__)
 TZ = ZoneInfo('Europe/Paris')
@@ -26,6 +27,9 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         self.did = entry.data['did']
         self.lock = asyncio.Lock()
         self.state_path = hass.config.path(".storage", f"{DOMAIN}.{entry.entry_id}.v020.json")
+        self.daily_path = hass.config.path(".storage", f"{DOMAIN}.{entry.entry_id}.daily.json")
+        self.daily = DailyBalance()
+        self.daily_storage_failed = False
         self.storage_failed = False
         self.state = {'samples': [], 'pending': None, 'last_attempt': 0, 'last_result': 'none'}
         self.cal = Calibration()
@@ -37,6 +41,11 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         saved = await self.hass.async_add_executor_job(load_state, self.state_path)
         if saved is not None:
             self.state.update(saved)
+        try:
+            self.daily = await self.hass.async_add_executor_job(load_daily, self.daily_path)
+        except Exception:
+            self.daily_storage_failed = True
+            _LOGGER.warning("MOVA daily diagnostic history unavailable; existing file preserved")
 
     async def _save(self):
         try:
@@ -75,6 +84,10 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         w, f = data.get('warning_mask'), data.get('fault_mask')
         data['has_warning'] = w != 0 if type(w) is int and w >= 0 else None
         data['has_fault'] = f != 0 if type(f) is int and f >= 0 else None
+        data.update(self.daily.summary(data, now, fresh=data.get("_daily_observed") is True))
+        if self.daily_storage_failed:
+            data.update(daily_reconstructed=None, daily_portion_weight=None, daily_difference=None,
+                        daily_corrected_forecast=None, daily_quality='storage_error', daily_current={})
         return data
 
     async def _snapshot(self):
@@ -134,6 +147,19 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                     self.compensated.reset('disabled' if not options['auto_calibration'] else 'waiting')
                 if changed:
                     await self._save()
+                # Diagnostic persistence is isolated from the safety state and planner.
+                data["_daily_observed"] = False
+                if not self.daily_storage_failed:
+                    reference = effective_weight(self.state['samples'], options['portion_weight'], options['auto_calibration'])
+                    previous_daily = self.daily.export()
+                    if self.daily.observe(data, now, duration, reference, options['target']):
+                        try:
+                            await self.hass.async_add_executor_job(save_state, self.daily_path, self.daily.export())
+                            data["_daily_observed"] = True
+                        except Exception:
+                            self.daily = DailyBalance(previous_daily)
+                            self.daily_storage_failed = True
+                            _LOGGER.warning("Could not save MOVA daily diagnostic history")
                 result = self._enrich(data, now)
                 try:
                     await self._notify(result['has_warning'] is True or result['has_fault'] is True or result['manual_result'] == 'uncertain')

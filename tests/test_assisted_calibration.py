@@ -125,6 +125,9 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.c = self.module.NutriPalCoordinator.__new__(self.module.NutriPalCoordinator)
         self.c.lock = asyncio.Lock(); self.c.stopping = False; self.c.storage_failed = False
         self.c.hass = Mock(is_running=True); self.c.entry = Mock(options={})
+        self.c.daily = self.module.DailyBalance(); self.c.daily_storage_failed = False
+        self.c.daily_path = "unused-test-path"
+        self.c.hass.async_add_executor_job = AsyncMock()
         self.c.state = initial(); self.c.cal = Mock(); self.c.api = Mock()
         self.c._save = AsyncMock(); self.c.async_request_refresh = AsyncMock()
         self.today = self.module.datetime.now(self.module.TZ).date()

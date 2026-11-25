@@ -89,7 +89,7 @@ class MealCalendarTests(unittest.TestCase):
         e = dashboard.find_entities(registry())
         for lang, title in [('fr', 'Repas programmés'), ('en', 'Scheduled meals')]:
             result = dashboard.make_dashboard(e, lang)
-            self.assertEqual(len(result['views']), 2)
+            self.assertEqual(len(result['views']), 3)
             view = result['views'][1]
             self.assertEqual(view['title'], title)
             self.assertEqual(view['cards'][0]['entities'], [e['meal_calendar']])
@@ -101,7 +101,7 @@ class MealCalendarTests(unittest.TestCase):
         for row in r['data']['entities']:
             if row['entity_id'].startswith('calendar.'):
                 row['disabled_by'] = 'user'
-        self.assertEqual(len(dashboard.make_dashboard(dashboard.find_entities(r))['views']), 1)
+        self.assertEqual([v['path'] for v in dashboard.make_dashboard(dashboard.find_entities(r))['views']], ['feeding', 'feeding-history'])
 
 
 class CalendarEntityTests(unittest.IsolatedAsyncioTestCase):

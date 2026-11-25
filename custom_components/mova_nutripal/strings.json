@@ -165,6 +165,31 @@
       },
       "compensated_weight": {
         "name": "Experimental compensated median weight"
+      },
+      "daily_reconstructed": {
+        "name": "Reconstructed daily dispensing"
+      },
+      "daily_portion_weight": {
+        "name": "Reconstructed daily mean portion weight"
+      },
+      "daily_difference": {
+        "name": "Daily reconstructed minus theoretical difference"
+      },
+      "daily_corrected_forecast": {
+        "name": "Indicative corrected daily forecast"
+      },
+      "daily_history_count": {
+        "name": "Daily feeding balance history"
+      },
+      "daily_quality": {
+        "name": "Feeding balance data quality",
+        "state": {
+          "reconstructed": "Reconstructed, not certified",
+          "missing_boundary": "Missing day boundary",
+          "inconsistent": "Inconsistent data",
+          "unavailable": "Data unavailable",
+          "storage_error": "Local history unavailable"
+        }
       }
     },
     "binary_sensor": {

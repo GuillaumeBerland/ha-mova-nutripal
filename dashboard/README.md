@@ -26,3 +26,7 @@ The camera tile is present only when the camera entity is enabled in the selecte
 The next meal is displayed only for an unambiguous supported daily kibble schedule; unsupported, overdue-unconfirmed or unavailable schedules remain unavailable. The displayed time is a schedule, not a guarantee of dispensing. Estimated distribution and forecast are not measured consumption. Automatic supplementation remains simulation only.
 
 Do not commit generated personal dashboards or registry data to the public repository.
+
+### Daily balance (alpha.4)
+
+Regenerate the dashboard after the new diagnostic sensors are created. The feeding view separates MOVA consumption, reconstructed dispensing, and theoretical estimates (including the reference weight). The optional Feeding history view shows archived dated totals, including incomplete days, with missing quantities displayed as unknown. The first complete day requires both observed midnight boundaries. No historical reconstruction is attempted for days before installation. No dashboard action changes feeding settings or dispenses food.

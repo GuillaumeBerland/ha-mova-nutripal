@@ -7,9 +7,9 @@ from math import isfinite
 from .const import DOMAIN
 from .entity import NutriPalEntity
 
-GRAMS = ("intake_today", "intake_yesterday", "bowl_weight", "configured_weight", "calibration_weight", "estimated_distributed", "forecast", "budget", "target", "measured_weight", "compensated_weight")
-COUNTS = ("meals_today", "meals_yesterday", "portions_today", "portions_yesterday", "supplement_remaining", "remaining_portions", "suggested_portions", "calibration_samples", "compensated_samples")
-OTHER = ("device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "decision", "battery", "desiccant_days", "status_text", "manual_state", "manual_result", "next_meal", "next_meal_portions")
+GRAMS = ("intake_today", "intake_yesterday", "bowl_weight", "configured_weight", "calibration_weight", "estimated_distributed", "forecast", "budget", "target", "measured_weight", "compensated_weight", "daily_reconstructed", "daily_portion_weight", "daily_difference", "daily_corrected_forecast")
+COUNTS = ("meals_today", "meals_yesterday", "portions_today", "portions_yesterday", "supplement_remaining", "remaining_portions", "suggested_portions", "calibration_samples", "compensated_samples", "daily_history_count")
+OTHER = ("device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "decision", "battery", "desiccant_days", "status_text", "manual_state", "manual_result", "next_meal", "next_meal_portions", "daily_quality")
 DIAGNOSTIC = {"device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "supplement_remaining", "configured_weight", "compensated_weight", "compensated_samples"}
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -51,6 +51,7 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
             "status_text": ["idle","feeding","supplements","fault","food_fault","supplement_fault","unknown"],
             "manual_state": ["disabled","pending","cooldown","blocked","ready"],
             "manual_result": ["none","pending","confirmed","uncertain","acknowledged"],
+            "daily_quality": ["reconstructed", "missing_boundary", "inconsistent", "unavailable", "storage_error"],
         }
         if key in enum_options:
             self._attr_device_class = SensorDeviceClass.ENUM
@@ -78,6 +79,10 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        if self.key == "daily_history_count":
+            return {"days": self.coordinator.data.get("daily_history", []), "diagnostic_only": True}
+        if self.key == "daily_quality":
+            return {"current": self.coordinator.data.get("daily_current", {}), "diagnostic_only": True}
         if self.key == "compensated_samples":
             return {"diagnostic_only": True, "used_for_feeding": False,
                     "observation_status": self.coordinator.data.get("compensated_status"),

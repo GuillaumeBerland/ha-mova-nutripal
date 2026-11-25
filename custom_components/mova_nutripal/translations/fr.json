@@ -165,6 +165,31 @@
       },
       "compensated_weight": {
         "name": "Poids médian compensé expérimental"
+      },
+      "daily_reconstructed": {
+        "name": "Distribution journalière reconstituée"
+      },
+      "daily_portion_weight": {
+        "name": "Poids moyen journalier reconstitué par portion"
+      },
+      "daily_difference": {
+        "name": "Écart journalier reconstitué moins théorique"
+      },
+      "daily_corrected_forecast": {
+        "name": "Prévision journalière corrigée indicative"
+      },
+      "daily_history_count": {
+        "name": "Historique des bilans alimentaires"
+      },
+      "daily_quality": {
+        "name": "Qualité du bilan alimentaire",
+        "state": {
+          "reconstructed": "Reconstitué, non certifié",
+          "missing_boundary": "Limite de journée manquante",
+          "inconsistent": "Données incohérentes",
+          "unavailable": "Données indisponibles",
+          "storage_error": "Historique local indisponible"
+        }
       }
     },
     "binary_sensor": {

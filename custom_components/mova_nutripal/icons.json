@@ -128,6 +128,31 @@
       },
       "compensated_weight": {
         "default": "mdi:scale-balance"
+      },
+      "daily_reconstructed": {
+        "default": "mdi:scale-balance"
+      },
+      "daily_portion_weight": {
+        "default": "mdi:scale"
+      },
+      "daily_difference": {
+        "default": "mdi:compare"
+      },
+      "daily_corrected_forecast": {
+        "default": "mdi:chart-line"
+      },
+      "daily_history_count": {
+        "default": "mdi:calendar-text"
+      },
+      "daily_quality": {
+        "default": "mdi:clipboard-check-outline",
+        "state": {
+          "reconstructed": "mdi:scale-balance",
+          "missing_boundary": "mdi:calendar-alert",
+          "inconsistent": "mdi:alert-circle-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "storage_error": "mdi:database-alert-outline"
+        }
       }
     },
     "binary_sensor": {
