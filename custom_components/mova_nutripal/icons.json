@@ -153,6 +153,9 @@
           "unavailable": "mdi:help-circle-outline",
           "storage_error": "mdi:database-alert-outline"
         }
+      },
+      "physical_reference": {
+        "default": "mdi:scale-balance"
       }
     },
     "binary_sensor": {

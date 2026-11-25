@@ -46,3 +46,21 @@ add_calibration_measurement:
       required: true
       selector:
         boolean:
+record_physical_calibration:
+  target:
+    entity:
+      integration: mova_nutripal
+      domain: sensor
+  fields:
+    measurement_date:
+      required: true
+      selector:
+        date:
+    trials:
+      required: true
+      selector:
+        object: {}
+    confirmed:
+      required: true
+      selector:
+        boolean:

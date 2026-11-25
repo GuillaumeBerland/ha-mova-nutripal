@@ -7,6 +7,7 @@ from math import isfinite
 from datetime import date, timedelta
 from copy import deepcopy
 from .compensated import MAX_RECORDS, append_observation
+from .physical_calibration import MAX_SERIES, append_series
 
 
 MAX_SAMPLES = 15
@@ -126,6 +127,13 @@ def load_state(path):
             for record in records[-MAX_RECORDS:]:
                 append_observation(clean, record)
         state['compensated_records'] = clean
+    if 'physical_series' in state:
+        records = state['physical_series']
+        clean = []
+        if isinstance(records, list):
+            for record in records[-MAX_SERIES:]:
+                append_series(clean, record)
+        state['physical_series'] = clean
     return state
 
 

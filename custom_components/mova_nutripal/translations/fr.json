@@ -27,7 +27,7 @@
           "threshold": "Seuil du bol (g)",
           "max_complement": "Portions maximales par complément simulé",
           "manual_enabled": "Autoriser le complément manuel (une portion)",
-          "auto_calibration": "Calibration passive automatique",
+          "auto_calibration": "Collecte automatique des mesures (diagnostic)",
           "video_codec": "Codec du direct vidéo (h264 compatible / hevc natif)"
         }
       }
@@ -190,6 +190,9 @@
           "unavailable": "Données indisponibles",
           "storage_error": "Historique local indisponible"
         }
+      },
+      "physical_reference": {
+        "name": "Référence proposée par les pesées"
       }
     },
     "binary_sensor": {
@@ -215,7 +218,7 @@
         "name": "Défaut actif"
       },
       "calibration_enabled": {
-        "name": "Calibration passive"
+        "name": "Collecte de calibration automatique"
       },
       "manual_enabled": {
         "name": "Option complément manuel activée"
@@ -283,6 +286,23 @@
         "confirmed": {
           "name": "Pesée vérifiée",
           "description": "Confirmer que les chats n’ont pas mangé et qu’aucune croquette n’a été ajoutée ou retirée entre les pesées."
+        }
+      }
+    },
+    "record_physical_calibration": {
+      "name": "Enregistrer une série de pesées physiques",
+      "description": "Enregistre une série sans modifier la référence ni distribuer. Cibler uniquement le capteur Mesures de calibration valides.",
+      "fields": {
+        "measurement_date": {
+          "name": "Date des pesées"
+        },
+        "trials": {
+          "name": "Pesées",
+          "description": "Liste de 3 à 30 objets {portions, grams} : poids net en grammes."
+        },
+        "confirmed": {
+          "name": "Pesées vérifiées",
+          "description": "Confirmer les pesées indépendantes sans consommation ni ajout de croquettes."
         }
       }
     }

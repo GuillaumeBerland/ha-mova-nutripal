@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 import asyncio
 import logging
@@ -15,6 +15,7 @@ from .control import manual_allowed, confirm_pending
 from .compensated import CompensatedCalibration, append_observation, diagnostic_summary, observation_window
 from .presentation import next_scheduled_meal
 from .daily_balance import DailyBalance, load_daily
+from .physical_calibration import build_series, append_series, summary as physical_summary
 
 _LOGGER = logging.getLogger(__name__)
 TZ = ZoneInfo('Europe/Paris')
@@ -61,7 +62,9 @@ class NutriPalCoordinator(DataUpdateCoordinator):
     def _enrich(self, data, now):
         options = self.options
         samples = self.state['samples']
-        weight = effective_weight(samples, options['portion_weight'], options['auto_calibration'])
+        # Only an explicitly configured reference can affect feeding decisions.
+        weight = options['portion_weight']
+        data.update(physical_summary(deepcopy(self.state.get('physical_series', [])), weight))
         data.update(plan(data, {**options, 'portion_weight': weight}, now))
         data['calibration_history'] = calibration_history(self.state)
         records = self.state.get('compensated_records', [])
@@ -153,7 +156,7 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                 # Diagnostic persistence is isolated from the safety state and planner.
                 data["_daily_observed"] = False
                 if not self.daily_storage_failed:
-                    reference = effective_weight(self.state['samples'], options['portion_weight'], options['auto_calibration'])
+                    reference = options['portion_weight']
                     previous_daily = self.daily.export()
                     if self.daily.observe(data, now, duration, reference, options['target']):
                         try:
@@ -235,6 +238,30 @@ class NutriPalCoordinator(DataUpdateCoordinator):
             self.cal.reset()
         # A normal refresh publishes the new median using current device data.
         # No dispensing command is issued by this action.
+        await self.async_request_refresh()
+
+    async def async_record_physical_calibration(self, measurement_date, trials, confirmed):
+        """Store a weighing series without applying it or sending a command."""
+        async with self.lock:
+            if self.stopping or self.storage_failed or not self.hass.is_running:
+                raise HomeAssistantError('Calibration storage unavailable')
+            if self.state['pending'] is not None or self.options['manual_enabled']:
+                raise HomeAssistantError('Disable manual dispensing and resolve any pending command first')
+            if type(measurement_date) is not date or measurement_date > datetime.now(TZ).date():
+                raise HomeAssistantError('Invalid measurement date')
+            try:
+                record = build_series(measurement_date, trials, confirmed)
+            except ValueError as exc:
+                raise HomeAssistantError(str(exc)) from None
+            previous = deepcopy(self.state)
+            if not append_series(self.state.setdefault('physical_series', []), record):
+                self.state = previous
+                raise HomeAssistantError('This weighing series is already recorded')
+            try:
+                await self._save()
+            except Exception:
+                self.state = previous
+                raise HomeAssistantError('Could not save weighing series') from None
         await self.async_request_refresh()
 
     async def async_reset_calibration(self):

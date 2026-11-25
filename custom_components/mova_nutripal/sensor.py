@@ -7,10 +7,10 @@ from math import isfinite
 from .const import DOMAIN
 from .entity import NutriPalEntity
 
-GRAMS = ("intake_today", "intake_yesterday", "bowl_weight", "configured_weight", "calibration_weight", "estimated_distributed", "forecast", "budget", "target", "measured_weight", "compensated_weight", "daily_reconstructed", "daily_portion_weight", "daily_difference", "daily_corrected_forecast")
+GRAMS = ("intake_today", "intake_yesterday", "bowl_weight", "configured_weight", "calibration_weight", "estimated_distributed", "forecast", "budget", "target", "measured_weight", "compensated_weight", "daily_reconstructed", "daily_portion_weight", "daily_difference", "daily_corrected_forecast", "physical_reference")
 COUNTS = ("meals_today", "meals_yesterday", "portions_today", "portions_yesterday", "supplement_remaining", "remaining_portions", "suggested_portions", "calibration_samples", "compensated_samples", "daily_history_count")
 OTHER = ("device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "decision", "battery", "desiccant_days", "status_text", "manual_state", "manual_result", "next_meal", "next_meal_portions", "daily_quality")
-DIAGNOSTIC = {"device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "supplement_remaining", "configured_weight", "compensated_weight", "compensated_samples"}
+DIAGNOSTIC = {"device_status", "warning_mask", "fault_mask", "feeding_mode", "sd_card_status", "supplement_remaining", "configured_weight", "compensated_weight", "compensated_samples", "physical_reference"}
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
@@ -24,6 +24,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
             vol.Required('weight_after'): vol.All(_weight, vol.Range(min=0, max=10000)),
             vol.Required('confirmed'): cv.boolean,
         }, 'async_add_calibration_measurement')
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        'record_physical_calibration', {
+            vol.Required('measurement_date'): cv.date,
+            vol.Required('trials'): list,
+            vol.Required('confirmed'): cv.boolean,
+        }, 'async_record_physical_calibration')
 
 
 def _whole_number(value):
@@ -44,6 +50,8 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
         if key == "compensated_weight":
             self._attr_suggested_display_precision = 2
+        if key in ("physical_reference", "calibration_weight"):
+            self._attr_suggested_display_precision = 1
         if key == "next_meal":
             self._attr_device_class = SensorDeviceClass.TIMESTAMP
         if key == "decision":
@@ -75,12 +83,24 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
             raise HomeAssistantError('Select the valid calibration samples sensor')
         await self.coordinator.async_add_calibration_measurement(**kwargs)
 
+    async def async_record_physical_calibration(self, **kwargs):
+        if self.key != 'calibration_samples':
+            raise HomeAssistantError('Select the valid calibration samples sensor')
+        await self.coordinator.async_record_physical_calibration(**kwargs)
+
     @property
     def native_value(self):
         return self.coordinator.data.get(self.key)
 
     @property
     def extra_state_attributes(self):
+        if self.key == "physical_reference":
+            return {'series': self.coordinator.data.get('physical_series', []),
+                    'matches_configured_reference': self.coordinator.data.get('reference_matches_series', False),
+                    'used_for_feeding': False}
+        if self.key == "calibration_weight":
+            return {'source': 'configured_reference',
+                    'matches_latest_physical_series': self.coordinator.data.get('reference_matches_series', False)}
         if self.key == "daily_history_count":
             return {"days": self.coordinator.data.get("daily_history", []), "diagnostic_only": True}
         if self.key == "daily_quality":
@@ -93,7 +113,7 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
                     "rejected_observations": sum(r.get('quality') == 'rejected' for r in self.coordinator.data.get("compensated_history", []))}
         if self.key == "calibration_samples":
             history = self.coordinator.data.get('calibration_history', [])
-            return {'assisted_samples': sum(row['source'] == 'assisted' for row in history),
+            return {'diagnostic_only': True, 'used_for_feeding': False, 'assisted_samples': sum(row['source'] == 'assisted' for row in history),
                     'passive_samples': sum(row['source'] == 'passive' for row in history),
                     'legacy_samples': sum(row['source'] == 'legacy' for row in history),
                     'samples': history}

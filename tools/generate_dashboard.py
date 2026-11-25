@@ -23,7 +23,7 @@ GROUPS = {
 OPTIONAL = {
     'sensor': ('battery', 'meals_today', 'meals_yesterday', 'portions_today', 'portions_yesterday',
                'daily_reconstructed', 'daily_corrected_forecast', 'daily_quality', 'daily_history_count',
-               'daily_difference', 'daily_portion_weight', 'compensated_samples', 'compensated_weight'),
+               'daily_difference', 'daily_portion_weight', 'compensated_samples', 'compensated_weight', 'physical_reference'),
     'binary_sensor': ('battery_present', 'child_lock', 'camera_enabled', 'manual_enabled'),
     'camera': ('camera_snapshot',),
     'calendar': ('meal_calendar',),
@@ -77,9 +77,10 @@ LABELS = {
     'budget': ('Budget restant', 'Extra budget'),
     'suggested_portions': ('Complément simulé (portions)', 'Simulated extra portions'),
     'decision': ('Décision simulée', 'Simulated decision'),
-    'calibration_enabled': ('Calibration passive', 'Passive calibration'),
+    'calibration_enabled': ('Collecte automatique (diagnostic)', 'Automatic collection (diagnostic)'),
     'configured_weight': ('Poids nominal par portion', 'Nominal portion weight'),
-    'calibration_weight': ('Poids / portion', 'Portion weight'),
+    'calibration_weight': ('Référence utilisée / portion', 'Configured reference / portion'),
+    'physical_reference': ('Référence proposée (pesées)', 'Suggested physical reference'),
     'measured_weight': ('Poids médian calibré par portion', 'Calibrated median portion weight'),
     'calibration_samples': ('Mesures valides', 'Valid samples'),
     'online': ('Connexion', 'Connection'),
@@ -181,7 +182,7 @@ def daily_balance_card(e, lang):
               "{% elif q == 'storage_error' %}", tr('Historique local indisponible.', 'Local history unavailable.'),
               "{% else %}", tr('En attente de données cohérentes.', 'Waiting for consistent data.'), "{% endif %}", "{% endif %}\n",
               tr('**Calcul théorique de la régulation**', '**Theoretical regulation calculation**')+'\n',
-              tr('Poids utilisé :', 'Weight used:')+" {% if is_number(w) %}{{ '%g'|format(w) }} g/portion{% else %}—{% endif %}\n",
+              tr('Référence configurée :', 'Configured reference:')+" {% if is_number(w) %}{{ '%g'|format(w) }} g/portion{% else %}—{% endif %}\n",
               tr('Distribué (est.) :', 'Dispensed (est.):')+" {% if is_number(d) %}{{ '%g'|format(d) }} g{% else %}—{% endif %}\n",
               tr('Prévision théorique :', 'Theoretical forecast:')+" {% if is_number(f) %}{{ '%g'|format(f) }} g{% else %}—{% endif %}\n",
               "{% if is_number(f) and is_number(t) and f > t %}",
@@ -260,14 +261,14 @@ def calibration_card(e, lang):
         "{% elif n < 3 %}",
         tr('## {{ n }} / 3 mesures initiales', '## {{ n }} / 3 initial samples') + "\n",
         "{{ '🟪' * n }}{{ '⬜' * (3 - n) }}\n",
-        tr('Poids de référence utilisé en attendant trois mesures valides.', 'Reference weight used until three valid samples.'),
+        tr('Mesures de diagnostic uniquement. La référence configurée reste utilisée.', 'Diagnostic measurements only. The configured reference remains in use.'),
         "{% elif is_number(measured) and measured > 0 %}",
         tr('## {{ n }} mesures valides', '## {{ n }} valid samples') + "\n",
         tr('🟪🟪🟪 · Minimum initial atteint', '🟪🟪🟪 · Initial minimum reached') + "\n",
-        tr('Médiane mesurée :', 'Measured median:') + " **{{ '%g'|format(measured|round(2)) }} g**",
+        tr('Médiane de diagnostic :', 'Diagnostic median:') + " **{{ '%g'|format(measured|round(2)) }} g**",
         "{% else %}", tr('Minimum initial atteint · médiane indisponible.', 'Initial minimum reached · median unavailable.'), "{% endif %}",
     ])
-    return dict(_markdown(content, [samples, enabled, measured]), title=tr('Calibration passive', 'Passive calibration'))
+    return dict(_markdown(content, [samples, enabled, measured]), title=tr('Calibration · diagnostic', 'Calibration · diagnostics'))
 
 
 def health_card(e, lang):
@@ -333,7 +334,7 @@ def _groups(e, lang):
         ]),
         (tr('Calibration et entretien', 'Calibration and maintenance'), 'mdi:cog-outline', [
             calibration_card(e, lang),
-            rows(('calibration_enabled', 'configured_weight', 'calibration_weight', 'measured_weight', 'compensated_samples', 'compensated_weight')),
+            rows(('calibration_enabled', 'configured_weight', 'calibration_weight', 'physical_reference', 'measured_weight', 'compensated_samples', 'compensated_weight')),
             health_card(e, lang),
             rows(('online', 'status_text', 'has_warning', 'has_fault', 'desiccant_days', 'battery_present', 'battery', 'child_lock', 'camera_enabled')),
             rows(('manual_enabled', 'manual_state', 'manual_pending', 'manual_result'), tr('Complément manuel', 'Manual supplement')),

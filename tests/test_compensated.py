@@ -207,7 +207,7 @@ class CompensatedTests(unittest.TestCase):
         after = c._enrich(deepcopy(self.d), DUE + timedelta(seconds=130))
         for key in ('calibration_weight','calibration_samples','estimated_distributed','budget','forecast','decision','manual_state'):
             self.assertEqual(before[key],after[key],key)
-        self.assertEqual(after['calibration_weight'],7)
+        self.assertEqual(after['calibration_weight'],9)
         self.assertEqual(after['compensated_weight'],6.6)
         self.assertEqual(c.api.mock_calls,[])
 

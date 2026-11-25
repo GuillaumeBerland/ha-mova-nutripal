@@ -27,7 +27,7 @@
           "threshold": "Bowl threshold (g)",
           "max_complement": "Maximum portions per simulated supplement",
           "manual_enabled": "Allow manual supplement (one portion)",
-          "auto_calibration": "Automatic passive calibration",
+          "auto_calibration": "Automatic measurement collection (diagnostic)",
           "video_codec": "Live video codec (h264 compatible / hevc native)"
         }
       }
@@ -190,6 +190,9 @@
           "unavailable": "Data unavailable",
           "storage_error": "Local history unavailable"
         }
+      },
+      "physical_reference": {
+        "name": "Suggested physical reference"
       }
     },
     "binary_sensor": {
@@ -215,7 +218,7 @@
         "name": "Active fault"
       },
       "calibration_enabled": {
-        "name": "Passive calibration enabled"
+        "name": "Automatic calibration collection"
       },
       "manual_enabled": {
         "name": "Manual supplement option enabled"
@@ -283,6 +286,23 @@
         "confirmed": {
           "name": "Verified weighing",
           "description": "Confirm no food was eaten, added or removed between weighings."
+        }
+      }
+    },
+    "record_physical_calibration": {
+      "name": "Record a physical weighing series",
+      "description": "Records a series without changing the reference or dispensing. Target only the valid calibration samples sensor.",
+      "fields": {
+        "measurement_date": {
+          "name": "Weighing date"
+        },
+        "trials": {
+          "name": "Weighings",
+          "description": "List of 3 to 30 objects {portions, grams}: net food weight in grams."
+        },
+        "confirmed": {
+          "name": "Verified weighings",
+          "description": "Confirm independent weighings without consumption or added food."
         }
       }
     }
