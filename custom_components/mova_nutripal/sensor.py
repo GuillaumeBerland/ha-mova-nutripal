@@ -42,6 +42,8 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
         super().__init__(coordinator, key)
         if key in DIAGNOSTIC:
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        if key == "compensated_weight":
+            self._attr_suggested_display_precision = 2
         if key == "next_meal":
             self._attr_device_class = SensorDeviceClass.TIMESTAMP
         if key == "decision":
@@ -86,7 +88,9 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
         if self.key == "compensated_samples":
             return {"diagnostic_only": True, "used_for_feeding": False,
                     "observation_status": self.coordinator.data.get("compensated_status"),
-                    "observations": self.coordinator.data.get("compensated_history", [])}
+                    "observations": self.coordinator.data.get("compensated_history", []),
+                    "legacy_observations": sum(r.get('quality') == 'legacy_unverified' for r in self.coordinator.data.get("compensated_history", [])),
+                    "rejected_observations": sum(r.get('quality') == 'rejected' for r in self.coordinator.data.get("compensated_history", []))}
         if self.key == "calibration_samples":
             history = self.coordinator.data.get('calibration_history', [])
             return {'assisted_samples': sum(row['source'] == 'assisted' for row in history),

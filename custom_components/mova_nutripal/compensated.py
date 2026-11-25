@@ -7,7 +7,11 @@ from .calendar_schedule import TZ, current_slots, _unambiguous_start
 
 MAX_RECORDS = 30
 MAX_SNAPSHOT_SECONDS = 30
-WINDOW_SECONDS = 360
+WINDOW_SECONDS = 360  # Pre-meal window and legacy records.
+POST_WINDOW_SECONDS = 1800
+MIN_FINAL_SECONDS = 1500
+STABLE_SECONDS = 300
+PEAK_TOLERANCE_GRAMS = 1
 STABILITY_GRAMS = 1
 
 
@@ -37,16 +41,23 @@ def _schedule(data, now):
             return None
         row = next(row for row in rows if time.fromisoformat(row['feedingTime']) == at)
         result.append((due.timestamp(), portions, row['planFinishStatus']))
-    if any(b[0] - a[0] <= 2 * WINDOW_SECONDS for a, b in zip(result, result[1:])):
+    if any(b[0] - a[0] <= WINDOW_SECONDS + POST_WINDOW_SECONDS for a, b in zip(result, result[1:])):
         return None
     return result
+
+
+def observation_window(data, now):
+    """Only extend polling for supported, non-overlapping scheduled meals."""
+    schedule = _schedule(data, now)
+    return bool(schedule and any(-WINDOW_SECONDS <= now.timestamp() - due <= POST_WINDOW_SECONDS
+                                 for due, _, _ in schedule))
 
 
 class CompensatedCalibration:
     """Compare stable bowl + cumulative intake around one autonomous meal.
 
-    Two pre- and two post-readings reduce, but cannot eliminate, cloud skew.
-    A post-reading is only considered after the plan reports completion.
+    Monitor the early bowl peak and require a late, stable mass balance.
+    Cloud consistency is not proof of true weight; diagnostics only.
     """
     def __init__(self):
         self.reset()
@@ -54,6 +65,10 @@ class CompensatedCalibration:
     def reset(self, status='waiting'):
         self.key = self.previous = self.baseline = self.post = None
         self.status = status
+        self.peak = None
+        self.last_post = None
+        self.stable_start = None
+        self.stable_mass = None
 
     def observe(self, data, now, duration):
         if (now.utcoffset() is None or not _number(duration) or duration > MAX_SNAPSHOT_SECONDS
@@ -67,14 +82,14 @@ class CompensatedCalibration:
         if schedule is None:
             self.reset('unsupported_schedule'); return None
         stamp = now.timestamp()
-        nearby = [row for row in schedule if abs(stamp - row[0]) <= WINDOW_SECONDS]
+        nearby = [row for row in schedule if -WINDOW_SECONDS <= stamp - row[0] <= POST_WINDOW_SECONDS]
         if len(nearby) != 1:
             self.reset('waiting'); return None
         due, portions, finished = nearby[0]
         key = (now.astimezone(TZ).date().isoformat(), due, tuple((t, p) for t, p, _ in schedule))
         if self.key != key:
             self.reset(); self.key = key
-        if self.status == 'recorded':
+        if self.status in ('recorded', 'rejected'):
             return None
         if any((t < due and not done) or (t > due and done) for t, _, done in schedule):
             self.reset('inconsistent_schedule'); return None
@@ -98,24 +113,45 @@ class CompensatedCalibration:
         if (obs['intake'] < base['intake'] or obs['count'] < base['count']
                 or obs['count'] > base['count'] + portions):
             self.reset('counter_inconsistent'); return None
-        if (not finished or data['device_status'] != 1 or stamp - due < 90
+        # Track bowl readings even before the counter catches up. A later estimate
+        # must not imply less food than the bowl actually held above baseline.
+        if self.last_post is None and stamp - due > 180:
+            self.reset('missing_early_observation'); return None
+        if self.last_post is not None:
+            gap = stamp - self.last_post['timestamp']
+            if not 0 < gap <= 120 or obs['intake'] < self.last_post['intake'] or obs['count'] < self.last_post['count']:
+                self.reset('observation_gap_or_counter_reset'); return None
+        self.last_post = obs
+        if self.peak is None or obs['bowl'] > self.peak['bowl']:
+            self.peak = dict(obs)
+        if (not finished or data['device_status'] != 1 or stamp - duration - due < 90
                 or obs['count'] != base['count'] + portions):
-            self.post = None; self.status = 'waiting_completion'; return None
-        # Do not use a snapshot spanning the first 90 seconds after dispensing.
-        if stamp - duration - due < 90:
-            self.post = None; self.status = 'waiting_completion'; return None
-        if self.post is not None and obs['intake'] < self.post['intake']:
-            self.reset('counter_inconsistent'); return None
-        if self.post is None or not _stable(self.post, obs):
-            self.post = obs; self.status = 'collecting_post'; return None
-        net = obs['bowl'] - base['bowl'] + obs['intake'] - base['intake']
-        weight = net / portions
-        if not 2 <= weight <= 20:
-            self.reset('out_of_range'); return None
-        self.status = 'recorded'
+            self.post = self.stable_start = self.stable_mass = None
+            self.status = 'waiting_completion'; return None
+        mass = obs['bowl'] + obs['intake']
+        if (self.post is None or not _stable(self.post, obs)
+                or abs(mass - self.stable_mass) > STABILITY_GRAMS):
+            self.stable_start = stamp
+            self.stable_mass = mass
+        self.post = obs
+        if stamp - duration - due < MIN_FINAL_SECONDS:
+            self.status = 'consolidating'; return None
+        stable = stamp - self.stable_start >= STABLE_SECONDS
+        net = mass - base['bowl'] - base['intake']
+        lower_bound = max(0, self.peak['bowl'] - base['bowl']) if self.peak else None
+        reason = ('missing_peak' if lower_bound is None else
+                  'below_observed_peak' if net + PEAK_TOLERANCE_GRAMS < lower_bound else
+                  'out_of_range' if not 2 <= net / portions <= 20 else
+                  'unstable_mass' if not stable else None)
+        # Give late cloud counters another chance until the last minute.
+        if reason and stamp - due < POST_WINDOW_SECONDS - 60:
+            self.status = reason; return None
+        self.status = 'rejected' if reason else 'recorded'
         return {'day': key[0], 'due': due, 'portions': portions,
-                'before': dict(base), 'after': obs,
-                'distributed': round(net, 2), 'weight': round(weight, 2)}
+                'before': dict(base), 'after': obs, 'peak': self.peak,
+                'distributed': round(net, 2), 'weight': round(net / portions, 2),
+                'method_version': 2, 'quality': 'rejected' if reason else 'accepted',
+                'reason': reason, 'stable_since': self.stable_start}
 
 
 def valid_record(record):
@@ -135,11 +171,34 @@ def valid_record(record):
                     or not _number(obs['bowl']) or not _number(obs['intake'])):
                 return False
         net = after['bowl'] - before['bowl'] + after['intake'] - before['intake']
-        return (0 < due - before['timestamp'] <= 180 and 90 <= after['timestamp'] - due <= WINDOW_SECONDS
-                and after['count'] - before['count'] == portions and after['intake'] >= before['intake']
-                and _number(record['distributed']) and record['distributed'] == round(net, 2)
-                and _number(record['weight']) and 2 <= net / portions <= 20
-                and record['weight'] == round(net / portions, 2))
+        common = (0 < due - before['timestamp'] <= 180
+                  and after['count'] - before['count'] == portions and after['intake'] >= before['intake']
+                  and type(record['distributed']) in (int, float) and record['distributed'] == round(net, 2)
+                  and type(record['weight']) in (int, float) and record['weight'] == round(net / portions, 2))
+        if not common:
+            return False
+        if 'method_version' not in record:
+            return 90 <= after['timestamp'] - due <= WINDOW_SECONDS and 2 <= net / portions <= 20
+        if record['method_version'] != 2 or not MIN_FINAL_SECONDS <= after['timestamp'] - due <= POST_WINDOW_SECONDS:
+            return False
+        peak = record['peak']
+        if peak is not None:
+            if (not _number(peak['bowl']) or not _number(peak['intake'])
+                    or not due <= peak['timestamp'] <= after['timestamp']
+                    or type(peak['count']) is not int or not before['count'] <= peak['count'] <= after['count']
+                    or not before['intake'] <= peak['intake'] <= after['intake']
+                    or peak['bowl'] < after['bowl']):
+                return False
+        since = record['stable_since']
+        if type(since) not in (int, float) or not due <= since <= after['timestamp']:
+            return False
+        lower = max(0, peak['bowl'] - before['bowl']) if peak is not None else None
+        reason = ('missing_peak' if lower is None else
+                  'below_observed_peak' if net + PEAK_TOLERANCE_GRAMS < lower else
+                  'out_of_range' if not 2 <= net / portions <= 20 else
+                  'unstable_mass' if after['timestamp'] - since < STABLE_SECONDS else None)
+        return (record['reason'] == reason and record['quality'] == ('rejected' if reason else 'accepted')
+                and (reason is None or after['timestamp'] - due >= POST_WINDOW_SECONDS - 60))
     except (KeyError, TypeError, ValueError, OverflowError, OSError):
         return False
 
@@ -157,5 +216,6 @@ def append_observation(records, record):
 
 
 def diagnostic_summary(records):
-    return {'compensated_samples': len(records),
-            'compensated_weight': round(median(r['weight'] for r in records), 2) if records else None}
+    accepted = [r for r in records if r.get('method_version') == 2 and r.get('quality') == 'accepted' and valid_record(r)]
+    return {'compensated_samples': len(accepted),
+            'compensated_weight': round(median(r['weight'] for r in accepted), 2) if accepted else None}

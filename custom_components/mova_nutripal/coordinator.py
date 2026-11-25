@@ -12,7 +12,7 @@ from .const import DEFAULTS, DOMAIN
 from .planner import plan
 from .calibration import Calibration, effective_weight, near_meal, number
 from .control import manual_allowed, confirm_pending
-from .compensated import CompensatedCalibration, append_observation, diagnostic_summary
+from .compensated import CompensatedCalibration, append_observation, diagnostic_summary, observation_window
 from .presentation import next_scheduled_meal
 from .daily_balance import DailyBalance, load_daily
 
@@ -66,7 +66,7 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         data['calibration_history'] = calibration_history(self.state)
         records = self.state.get('compensated_records', [])
         data.update(diagnostic_summary(records))
-        data['compensated_history'] = deepcopy(records)
+        data['compensated_history'] = [dict(deepcopy(r), quality=r.get('quality', 'legacy_unverified')) for r in records]
         data['compensated_status'] = self.compensated.status
         data.update(target=options['target'], calibration_weight=weight, simulation=True,
                     calibration_samples=len(samples), measured_weight=effective_weight(samples, None) if len(samples)>=3 else None,
@@ -127,7 +127,11 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                     self.state['last_result'] = 'uncertain'
                     changed = True
                 fast = near_meal(data, now) or (pending is not None and now.timestamp()-pending.get('time',0) <= 240) or self.cal.candidate is not None
-                self.update_interval = timedelta(seconds=30) if fast else timedelta(minutes=5)
+                compensated_active = (options['auto_calibration'] and not options['manual_enabled']
+                                      and pending is None and self.state['pending'] is None
+                                      and observation_window(data, now))
+                # Passive calibration retains its original window; only diagnostics extend polling.
+                self.update_interval = timedelta(seconds=30 if fast else 60 if compensated_active else 300)
                 if options['auto_calibration'] and fast:
                     baseline = self.cal.baseline
                     sample = self.cal.observe(data, now)
@@ -138,8 +142,7 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                 else:
                     self.cal.reset()
                 # Independent experimental observations; never append to calibration samples.
-                if (options['auto_calibration'] and fast and not options['manual_enabled']
-                        and pending is None and self.state['pending'] is None):
+                if compensated_active:
                     record = self.compensated.observe(data, now, duration)
                     if record is not None:
                         changed = append_observation(self.state.setdefault('compensated_records', []), record) or changed
