@@ -188,11 +188,18 @@
           "missing_boundary": "Limite de journée manquante",
           "inconsistent": "Données incohérentes",
           "unavailable": "Données indisponibles",
-          "storage_error": "Historique local indisponible"
+          "storage_error": "Historique local indisponible",
+          "excluded": "Non représentatif"
         }
       },
       "physical_reference": {
         "name": "Référence proposée par les pesées"
+      },
+      "scheduled_daily_portions": {
+        "name": "Portions programmées par jour"
+      },
+      "scheduled_daily_weight": {
+        "name": "Poids journalier programmé estimé"
       }
     },
     "binary_sensor": {
@@ -303,6 +310,19 @@
         "confirmed": {
           "name": "Pesées vérifiées",
           "description": "Confirmer les pesées indépendantes sans consommation ni ajout de croquettes."
+        }
+      }
+    },
+    "mark_feeding_day": {
+      "name": "Marquer une journée non représentative",
+      "description": "Cibler uniquement le capteur Historique des bilans alimentaires. Conserve les compteurs bruts et exclut le bilan des valeurs représentatives.",
+      "fields": {
+        "measurement_date": {
+          "name": "Date"
+        },
+        "reason": {
+          "name": "Motif",
+          "description": "1 à 120 caractères. Par exemple : essais de calibration."
         }
       }
     }

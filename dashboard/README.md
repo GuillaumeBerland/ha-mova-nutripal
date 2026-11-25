@@ -32,3 +32,15 @@ Do not commit generated personal dashboards or registry data to the public repos
 Regenerate the dashboard after the new diagnostic sensors are created. The feeding view separates MOVA consumption, reconstructed dispensing, and theoretical estimates (including the reference weight). The optional Feeding history view shows archived dated totals, including incomplete days, with missing quantities displayed as unknown. The first complete day requires both observed midnight boundaries. No historical reconstruction is attempted for days before installation. No dashboard action changes feeding settings or dispenses food.
 
 Since alpha.6, the configured reference is authoritative and automatic calibration medians are diagnostic only. The optional physical weighing proposal is displayed separately from the active reference. Regenerate after updating.
+
+### Beta dashboard
+
+The main view prioritizes the current daily schedule and the configured physical
+reference. If a reconstructed balance is unavailable, the colored summary shows
+the estimated daily program (or explicitly labeled theoretical counts if the new
+program sensors are unavailable). A marked day displays a non-representative
+warning and the unmodified raw counters, not a representative balance. The
+history view labels excluded rows; the physical card displays the latest recorded
+weighing series and whether its proposed value matches the configured reference.
+The three-sample diagnostic progress is no longer the main calibration card when
+the physical reference entity is present. No custom Lovelace cards are required.

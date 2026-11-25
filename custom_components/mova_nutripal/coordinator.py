@@ -15,6 +15,7 @@ from .control import manual_allowed, confirm_pending
 from .compensated import CompensatedCalibration, append_observation, diagnostic_summary, observation_window
 from .presentation import next_scheduled_meal
 from .daily_balance import DailyBalance, load_daily
+from .calendar_schedule import current_slots
 from .physical_calibration import build_series, append_series, summary as physical_summary
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,6 +67,10 @@ class NutriPalCoordinator(DataUpdateCoordinator):
         weight = options['portion_weight']
         data.update(physical_summary(deepcopy(self.state.get('physical_series', [])), weight))
         data.update(plan(data, {**options, 'portion_weight': weight}, now))
+        slots = current_slots(data, now)
+        scheduled = sum(portions for _, portions in slots) if slots is not None else None
+        data['scheduled_daily_portions'] = scheduled
+        data['scheduled_daily_weight'] = round(scheduled * weight, 2) if scheduled is not None else None
         data['calibration_history'] = calibration_history(self.state)
         records = self.state.get('compensated_records', [])
         data.update(diagnostic_summary(records))
@@ -158,10 +163,18 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                 if not self.daily_storage_failed:
                     reference = options['portion_weight']
                     previous_daily = self.daily.export()
-                    if self.daily.observe(data, now, duration, reference, options['target']):
+                    # A physical series may disturb MOVA's counters; conservatively flag its day.
+                    marked = False
+                    for series in self.state.get('physical_series', []):
+                        day = date.fromisoformat(series['date'])
+                        if (now.date() - timedelta(days=30) <= day <= now.date()
+                                and series['date'] not in self.daily.excluded_days):
+                            marked = self.daily.mark_day(day, now.date(), 'physical_calibration') or marked
+                    observed = self.daily.observe(data, now, duration, reference, options['target'])
+                    if observed or marked:
                         try:
                             await self.hass.async_add_executor_job(save_state, self.daily_path, self.daily.export())
-                            data["_daily_observed"] = True
+                            data["_daily_observed"] = observed
                         except Exception:
                             self.daily = DailyBalance(previous_daily)
                             self.daily_storage_failed = True
@@ -262,6 +275,25 @@ class NutriPalCoordinator(DataUpdateCoordinator):
             except Exception:
                 self.state = previous
                 raise HomeAssistantError('Could not save weighing series') from None
+        await self.async_request_refresh()
+
+    async def async_mark_feeding_day(self, measurement_date, reason):
+        """Persist a diagnostic exclusion; no device command or planner change."""
+        async with self.lock:
+            if self.stopping or self.daily_storage_failed or not self.hass.is_running:
+                raise HomeAssistantError('Daily history storage unavailable')
+            previous = self.daily.export()
+            try:
+                changed = self.daily.mark_day(measurement_date, datetime.now(TZ).date(), reason)
+            except ValueError as exc:
+                raise HomeAssistantError(str(exc)) from None
+            if changed:
+                try:
+                    await self.hass.async_add_executor_job(save_state, self.daily_path, self.daily.export())
+                except Exception:
+                    self.daily = DailyBalance(previous)
+                    self.daily_storage_failed = True
+                    raise HomeAssistantError('Could not save day exclusion') from None
         await self.async_request_refresh()
 
     async def async_reset_calibration(self):

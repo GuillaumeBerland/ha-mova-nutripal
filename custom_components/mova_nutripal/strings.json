@@ -188,11 +188,18 @@
           "missing_boundary": "Missing day boundary",
           "inconsistent": "Inconsistent data",
           "unavailable": "Data unavailable",
-          "storage_error": "Local history unavailable"
+          "storage_error": "Local history unavailable",
+          "excluded": "Non-representative"
         }
       },
       "physical_reference": {
         "name": "Suggested physical reference"
+      },
+      "scheduled_daily_portions": {
+        "name": "Daily scheduled portions"
+      },
+      "scheduled_daily_weight": {
+        "name": "Estimated daily scheduled weight"
       }
     },
     "binary_sensor": {
@@ -303,6 +310,19 @@
         "confirmed": {
           "name": "Verified weighings",
           "description": "Confirm independent weighings without consumption or added food."
+        }
+      }
+    },
+    "mark_feeding_day": {
+      "name": "Mark a non-representative day",
+      "description": "Target only the feeding history sensor. Preserves raw counters and excludes the balance from representative data.",
+      "fields": {
+        "measurement_date": {
+          "name": "Date"
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "1 to 120 characters, e.g. calibration trials."
         }
       }
     }

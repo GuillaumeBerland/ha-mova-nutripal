@@ -52,6 +52,7 @@ class DailyBalance:
         self.opening = None
         self.inconsistent = False
         self.history = []
+        self.excluded_days = {}
         if state is not None:
             # Diagnostic data are isolated from the actuator interlock.
             last = state['last']
@@ -75,8 +76,32 @@ class DailyBalance:
             self.last, self.opening, self.inconsistent = deepcopy(last), opening, state['inconsistent']
             self.history = sorted(history, key=lambda r: r['day'])
 
+            marks = state.get('excluded_days', {})
+            if (not isinstance(marks, dict) or len(marks) > MAX_DAYS + 1
+                    or any(not _day(day) or not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 120
+                           for day, reason in marks.items())):
+                raise ValueError('Invalid excluded days')
+            self.excluded_days = deepcopy(marks)
+
+    def mark_day(self, day, today, reason):
+        """Flag a non-representative day without changing raw observations."""
+        if type(day) is not date or not today - timedelta(days=MAX_DAYS) <= day <= today:
+            raise ValueError('Date must be within the last 30 days')
+        if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 120:
+            raise ValueError('Enter a reason of 1 to 120 characters')
+        key = day.isoformat()
+        changed = self.excluded_days.get(key) != reason.strip()
+        self.excluded_days[key] = reason.strip()
+        self.prune_marks(today)
+        return changed
+
+    def prune_marks(self, today):
+        cutoff = (today - timedelta(days=MAX_DAYS)).isoformat()
+        self.excluded_days = {k:v for k,v in self.excluded_days.items() if cutoff <= k <= today.isoformat()}
+
     def export(self):
-        return deepcopy(dict(last=self.last, opening=self.opening, inconsistent=self.inconsistent, history=self.history))
+        return deepcopy(dict(last=self.last, opening=self.opening, inconsistent=self.inconsistent,
+                             history=self.history, excluded_days=self.excluded_days))
 
     def observe(self, data, now, duration, reference, target):
         """Return True when a fresh observation can be persisted.
@@ -120,6 +145,7 @@ class DailyBalance:
             if o['portions'] < prev['portions'] or o['intake'] < prev['intake']:
                 self.inconsistent = True
         self.last = o
+        self.prune_marks(now.date())
         return True
 
     def summary(self, data, now, fresh=True):
@@ -132,15 +158,24 @@ class DailyBalance:
                        == (o['bowl'], o['intake'], o['portions']))
         r = _record(o['day'], o['intake'], o['portions'], self.opening, o['bowl'], o['reference'], o['target'],
                     'inconsistent' if self.inconsistent else 'missing_boundary' if self.opening is None else 'reconstructed') if current else {}
-        mass = r.get('reconstructed')
+        # Preserve the raw history; never advertise an excluded day as representative.
+        day = now.astimezone(TZ).date().isoformat()
+        excluded = day in self.excluded_days
+        if excluded:
+            r.update(quality='excluded', excluded_reason=self.excluded_days[day])
+        mass = None if excluded else r.get('reconstructed')
         theoretical, forecast = data.get('estimated_distributed'), data.get('forecast')
         corrected = (round(mass+forecast-theoretical, 2) if mass is not None and _weight(theoretical)
                      and _weight(forecast) and forecast >= theoretical
                      and data.get('decision') not in ('schedule_uncertain', 'unavailable') else None)
-        return dict(daily_reconstructed=mass, daily_portion_weight=r.get('portion_weight'),
+        return dict(daily_reconstructed=mass, daily_portion_weight=None if excluded else r.get('portion_weight'),
                     daily_difference=round(mass-theoretical, 2) if mass is not None and _weight(theoretical) else None,
                     daily_corrected_forecast=corrected, daily_quality=r.get('quality', 'unavailable'),
-                    daily_history_count=len(self.history), daily_history=deepcopy(self.history), daily_current=r)
+                    daily_history_count=len(self.history),
+                    daily_history=[dict(deepcopy(row), excluded_reason=self.excluded_days.get(row['day']))
+                                   for row in self.history], daily_current=r,
+                    daily_excluded_days=deepcopy(self.excluded_days),
+                    daily_yesterday_excluded=(now.astimezone(TZ).date()-timedelta(days=1)).isoformat() in self.excluded_days)
 
 
 def load_daily(path):

@@ -23,7 +23,8 @@ GROUPS = {
 OPTIONAL = {
     'sensor': ('battery', 'meals_today', 'meals_yesterday', 'portions_today', 'portions_yesterday',
                'daily_reconstructed', 'daily_corrected_forecast', 'daily_quality', 'daily_history_count',
-               'daily_difference', 'daily_portion_weight', 'compensated_samples', 'compensated_weight', 'physical_reference'),
+               'daily_difference', 'daily_portion_weight', 'compensated_samples', 'compensated_weight', 'physical_reference',
+               'scheduled_daily_portions', 'scheduled_daily_weight'),
     'binary_sensor': ('battery_present', 'child_lock', 'camera_enabled', 'manual_enabled'),
     'camera': ('camera_snapshot',),
     'calendar': ('meal_calendar',),
@@ -65,9 +66,9 @@ def find_entities(registry, device=None):
 # Labels belong to the generated view only; registry names and IDs are unchanged.
 LABELS = {
     'bowl_weight': ('Dans le bol', 'In the bowl'),
-    'intake_today': ('Mangé aujourd’hui', 'Eaten today'),
-    'intake_yesterday': ('Mangé hier', 'Eaten yesterday'),
-    'estimated_distributed': ('Distribué (est.)', 'Dispensed (est.)'),
+    'intake_today': ('Consommation MOVA', 'MOVA intake'),
+    'intake_yesterday': ('Consommation MOVA hier', 'MOVA intake yesterday'),
+    'estimated_distributed': ('Distribué théor. (brut)', 'Raw theoretical dispensing'),
     'next_meal': ('Prochain repas', 'Next meal'),
     'next_meal_portions': ('Portions du prochain repas', 'Next meal portions'),
     'remaining_portions': ('Portions autonomes restantes', 'Remaining scheduled portions'),
@@ -82,7 +83,7 @@ LABELS = {
     'calibration_weight': ('Référence utilisée / portion', 'Configured reference / portion'),
     'physical_reference': ('Référence proposée (pesées)', 'Suggested physical reference'),
     'measured_weight': ('Poids médian calibré par portion', 'Calibrated median portion weight'),
-    'calibration_samples': ('Mesures valides', 'Valid samples'),
+    'calibration_samples': ('Mesures classiques (diag.)', 'Classic samples (diag.)'),
     'online': ('Connexion', 'Connection'),
     'status_text': ('Distributeur', 'Feeder'),
     'has_warning': ('Alerte active', 'Active warning'),
@@ -104,6 +105,8 @@ LABELS = {
     'daily_difference': ('Écart reconst. / théorique', 'Reconstructed / theoretical difference'),
     'daily_portion_weight': ('Poids moyen reconst. / portion', 'Reconstructed mean / portion'),
     'daily_quality': ('Qualité du bilan', 'Balance quality'),
+    'scheduled_daily_weight': ('Programme (est.)', 'Program (est.)'),
+    'scheduled_daily_portions': ('Portions programmées', 'Scheduled portions'),
     'compensated_samples': ('Mesures compensées (exp.)', 'Compensated samples (exp.)'),
     'compensated_weight': ('Médiane compensée (exp.)', 'Compensated median (exp.)'),
     'camera_snapshot': ('Ouvrir la caméra', 'Open camera'),
@@ -158,10 +161,18 @@ def daily_balance_card(e, lang):
     r, c, q, d, f, t, eaten, bowl, w, mode = ids
     lines = ["{% set " + var + " = states('" + eid + "') | float(none) %}" for var,eid in
              zip(('r','c','d','f','t','eaten','bowl','w'),(r,c,d,f,t,eaten,bowl,w))]
+    if 'scheduled_daily_weight' in e and 'scheduled_daily_portions' in e:
+        sw, sp = e['scheduled_daily_weight'], e['scheduled_daily_portions']
+        ids += [sw, sp]
+        lines += ["{% set planned = states('"+sw+"')|float(none) %}",
+                  "{% set portions = states('"+sp+"')|int(none) %}"]
+    else:
+        lines += ["{% set planned = none %}", "{% set portions = none %}"]
     lines += ["{% set q = states('"+q+"') %}",
               "{% if is_state('"+mode+"', 'on') %}", tr('**Simulation uniquement**', '**Simulation only**'),
               "{% else %}", tr('⚠️ Mode simulation non confirmé', '⚠️ Simulation mode not confirmed'), "{% endif %}",
-              tr('**Consommé (MOVA) :**', '**Consumed (MOVA):**')+" {% if is_number(eaten) %}{{ '%g'|format(eaten) }} g{% else %}—{% endif %}\n",
+              "{% if q == 'excluded' %}", tr('⚠️ **Journée non représentative** — essais ou manipulation signalés. Les compteurs MOVA restent bruts.', '⚠️ **Non-representative day** — trials or handling flagged. MOVA counters remain raw.'), "{% endif %}\n",
+              tr('**Consommation déclarée par MOVA :**', '**Intake reported by MOVA:**')+" {% if is_number(eaten) %}{{ '%g'|format(eaten) }} g{% else %}—{% endif %}\n",
               tr('**Dans le bol :**', '**In the bowl:**')+" {% if is_number(bowl) %}{{ '%g'|format(bowl) }} g{% else %}—{% endif %}\n",
               "{% if q == 'reconstructed' and is_number(r) and r >= 0 and is_number(t) and t > 0 %}",
               "## {{ '%g'|format(r) }} / {{ '%g'|format(t) }} g\n",
@@ -176,16 +187,34 @@ def daily_balance_card(e, lang):
               "{% endif %}", "{% if is_number(d) %}",
               tr('Écart reconstitué / théorique :', 'Reconstructed / theoretical difference:')+" **{{ '%+.1f'|format(r-d) }} g**",
               "{% endif %}", "{% else %}",
-              tr('## Distribution reconstituée indisponible', '## Reconstructed dispensing unavailable'),
+              "{% if is_number(planned) and planned >= 0 and is_number(t) and t > 0 %}",
+              tr('**Programme quotidien normal (estimé)**', '**Normal daily program (estimated)**'),
+              "## {{ '%g'|format(planned) }} / {{ '%g'|format(t) }} g\n",
+              "{% set blue = [[(10*planned/t)|int,0]|max,10]|min %}",
+              "{{ '🟦'*blue }}{{ '⬜'*(10-blue) }}\n",
+              tr('Programme :', 'Program:')+" {{ portions if portions is not none else '—' }} " + tr('portions · hors essais et distributions supplémentaires.', 'portions · excluding trials and extra dispensing.'),
+              tr('Couverture de l’objectif :', 'Target coverage:')+" **{{ (100*planned/t)|round(1) }} %**\n",
+              "{% elif q != 'excluded' and is_number(d) and d >= 0 and is_number(t) and t > 0 %}",
+              tr('**Distribution théorique**', '**Theoretical dispensing**'),
+              "## {{ '%g'|format(d) }} / {{ '%g'|format(t) }} g\n",
+              "{% set blue = [[(10*d/t)|int,0]|max,10]|min %}",
+              "{% set total = [[(10*f/t)|int,blue]|max,10]|min if is_number(f) and f >= d else blue %}",
+              "{{ '🟦'*blue }}{{ '🟧'*(total-blue) }}{{ '⬜'*(10-total) }}\n",
+              tr('🟦 Déjà distribué (est.) · 🟧 Repas restants (est.)', '🟦 Already dispensed (est.) · 🟧 Remaining meals (est.)'),
+              "{% endif %}",
+              tr('**Distribution reconstituée indisponible**', '**Reconstructed dispensing unavailable**'),
               "{% if q == 'missing_boundary' %}", tr('Poids du bol à minuit non établi. Pas de mesure complète.', 'Midnight bowl weight not established. No full-day measurement.'),
+              "{% elif q == 'excluded' %}", tr('Journée exclue des bilans représentatifs.', 'Day excluded from representative balances.'),
               "{% elif q == 'inconsistent' %}", tr('Données incohérentes : bilan non calculé.', 'Inconsistent data: balance not calculated.'),
               "{% elif q == 'storage_error' %}", tr('Historique local indisponible.', 'Local history unavailable.'),
               "{% else %}", tr('En attente de données cohérentes.', 'Waiting for consistent data.'), "{% endif %}", "{% endif %}\n",
-              tr('**Calcul théorique de la régulation**', '**Theoretical regulation calculation**')+'\n',
+              "{% if q == 'reconstructed' and is_number(planned) and planned >= 0 %}",
+              tr('Programme quotidien normal :', 'Normal daily program:')+" **{{ '%g'|format(planned) }} g** ({{ portions if portions is not none else '—' }} "+tr('portions', 'portions')+")\n", "{% endif %}",
+              tr('**Calcul théorique de la régulation (compteurs bruts)**', '**Theoretical regulation calculation (raw counters)**')+'\n',
               tr('Référence configurée :', 'Configured reference:')+" {% if is_number(w) %}{{ '%g'|format(w) }} g/portion{% else %}—{% endif %}\n",
               tr('Distribué (est.) :', 'Dispensed (est.):')+" {% if is_number(d) %}{{ '%g'|format(d) }} g{% else %}—{% endif %}\n",
               tr('Prévision théorique :', 'Theoretical forecast:')+" {% if is_number(f) %}{{ '%g'|format(f) }} g{% else %}—{% endif %}\n",
-              "{% if is_number(f) and is_number(t) and f > t %}",
+              "{% if q != 'excluded' and is_number(f) and is_number(t) and f > t %}",
               tr('Dépassement **théorique** :', '**Theoretical** excess:')+" {{ '%g'|format(f-t) }} g",
               "{% endif %}\n", tr('Le bilan reconstitué ne pilote pas la distribution.', 'Reconstructed balance does not control dispensing.')]
     return dict(_markdown('\n'.join(lines), ids), title=tr('Bilan alimentaire journalier', 'Daily feeding balance'))
@@ -199,20 +228,22 @@ def daily_history_card(e, lang):
     lines = ["{% set rows = state_attr('"+hist+"', 'days') or [] %}",
              "{% set q = states('"+quality+"') %}",
              "{% if q == 'storage_error' %}", tr('⚠️ Stockage indisponible.', '⚠️ Storage unavailable.'), "{% endif %}",
-             tr('**Hier — données MOVA :**', '**Yesterday — MOVA data:**'),
-             tr('Consommé :', 'Consumed:')+" {% set y = states('"+e['intake_yesterday']+"')|float(none) %}{% if is_number(y) %}{{ '%g'|format(y) }} g{% else %}—{% endif %}",
+             tr('**Hier — données MOVA brutes :**', '**Yesterday — raw MOVA data:**'),
+             "{% if state_attr('"+hist+"', 'yesterday_excluded') == true %}",
+             tr('⚠️ Journée non représentative.', '⚠️ Non-representative day.'), "{% endif %}",
+             tr('Consommation déclarée :', 'Reported intake:')+" {% set y = states('"+e['intake_yesterday']+"')|float(none) %}{% if is_number(y) %}{{ '%g'|format(y) }} g{% else %}—{% endif %}",
              "{% if rows %}",
-             tr('| Date | Reconst. g | Théor. g | Mangé g | Écart g | Portions | État |', '| Date | Recon. g | Theor. g | Eaten g | Diff. g | Portions | Status |'),
+             tr('| Date | Reconst. g | Théor. g | MOVA g | Écart g | Portions | État |', '| Date | Recon. g | Theor. g | MOVA g | Diff. g | Portions | Status |'),
              '|---|---:|---:|---:|---:|---:|---|',
              "{% for row in rows|reverse -%}",
-             "| {{ row.day }} | {% for k in ['reconstructed','theoretical','consumed','difference','portions'] %}{{ '%g'|format(row[k]) if is_number(row[k]) else '—' }} | {% endfor %}{% if row.quality == 'reconstructed' %}"+tr('Reconstitué','Reconstructed')+"{% elif row.quality == 'inconsistent' %}"+tr('Incohérent','Inconsistent')+"{% else %}"+tr('Incomplet','Incomplete')+"{% endif %} |",
+             "| {{ row.day }} | {% for k in ['reconstructed','theoretical','consumed','difference','portions'] %}{{ '%g'|format(row[k]) if is_number(row[k]) else '—' }} | {% endfor %}{% if row.excluded_reason is defined and row.excluded_reason %}"+tr('Non représentatif','Non-representative')+"{% elif row.quality == 'reconstructed' %}"+tr('Reconstitué','Reconstructed')+"{% elif row.quality == 'inconsistent' %}"+tr('Incohérent','Inconsistent')+"{% else %}"+tr('Incomplet','Incomplete')+"{% endif %} |",
              "{% endfor %}", "{% else %}", tr('Aucun bilan archivé. Le premier bilan complet exige deux limites de journée observées.', 'No archived balances. The first complete balance requires two observed day boundaries.'), "{% endif %}\n",
              tr('Théorique = portions × poids de référence à la dernière lecture du jour. Les données absentes restent inconnues (—). Les bilans reconstitués supposent aucun ajout/retrait de croquettes non comptabilisé.', 'Theoretical = portions × reference weight at the final reading of the day. Missing values stay unknown (—). Reconstructed balances assume no unrecorded food additions/removals.')]
     entities = [hist, quality, e['intake_yesterday']]
     if 'portions_yesterday' in e:
         portions = e['portions_yesterday']
         entities.append(portions)
-        lines.insert(6, tr('Portions distribuées :', 'Portions dispensed:') + " {% set p = states('"+portions+"')|int(none) %}{{ p if p is not none else '—' }}")
+        lines.insert(lines.index("{% if rows %}"), tr('Portions distribuées :', 'Portions dispensed:') + " {% set p = states('"+portions+"')|int(none) %}{{ p if p is not none else '—' }}")
     return dict(_markdown('\n'.join(lines), entities), title=tr('Historique alimentaire · 30 jours', 'Feeding history · 30 days'))
 
 
@@ -271,6 +302,28 @@ def calibration_card(e, lang):
     return dict(_markdown(content, [samples, enabled, measured]), title=tr('Calibration · diagnostic', 'Calibration · diagnostics'))
 
 
+def physical_card(e, lang):
+    """Show actual saved series and configured value, without implying automatic application."""
+    fr = lang == 'fr'
+    def tr(a,b): return a if fr else b
+    physical, used = e['physical_reference'], e['calibration_weight']
+    lines = ["{% set series = state_attr('"+physical+"', 'series') or [] %}",
+             "{% set used = states('"+used+"')|float(none) %}",
+             "{% set proposed = states('"+physical+"')|float(none) %}",
+             "{% if is_number(used) %}", "## 🔒 {{ '%g'|format(used) }} g / "+tr('portion','portion')+"\n",
+             tr('**Référence configurée utilisée**', '**Configured reference in use**'), "{% else %}",
+             tr('Référence configurée indisponible.', 'Configured reference unavailable.'), "{% endif %}\n",
+             "{% if series and is_number(proposed) %}", "{% set latest = series[-1] %}",
+             "{% if is_number(used) and used == proposed %}",
+             tr('🟢 La référence correspond aux dernières pesées.', '🟢 Reference matches latest weighings.'), "{% else %}",
+             tr('🟠 Référence proposée :', '🟠 Suggested reference:')+" **{{ '%g'|format(proposed) }} g** · "+tr('application manuelle.', 'manual application.'), "{% endif %}\n",
+             "**{{ latest.trials|length }}** "+tr('pesées', 'weighings')+" · **{{ latest.total_portions }}** "+tr('portions', 'portions')+" · **{{ '%g'|format(latest.total_grams) }} g**\n",
+             tr('Série du', 'Series dated')+" {{ latest.date }}", "{% else %}",
+             tr('Aucune série de pesées disponible.', 'No physical weighing series available.'), "{% endif %}\n",
+             tr('Les diagnostics ne changent jamais cette référence.', 'Diagnostics never change this reference.')]
+    return dict(_markdown('\n'.join(lines), [physical, used]), title=tr('Calibration physique','Physical calibration'))
+
+
 def health_card(e, lang):
     """Unknown/disconnected data must never be reported as healthy."""
     fr = lang == 'fr'
@@ -319,7 +372,7 @@ def _groups(e, lang):
         return {'type': 'history-graph', 'title': title, 'hours_to_show': hours,
                 'entities': [{'entity': e[key], 'name': name(key)} for key in keys]}
     has_daily = all(k in e for k in ('daily_reconstructed', 'daily_corrected_forecast', 'daily_quality'))
-    feeding = [grid(('bowl_weight', 'intake_today', 'daily_reconstructed' if has_daily else 'estimated_distributed', 'intake_yesterday')),
+    feeding = [grid(('bowl_weight', 'intake_today', 'scheduled_daily_weight' if 'scheduled_daily_weight' in e else 'daily_reconstructed' if has_daily else 'estimated_distributed', 'intake_yesterday')),
                next_meal_card(e, lang),
                rows(('remaining_portions', 'meals_today', 'portions_today')),
                history(tr('Poids du bol · 24 h', 'Bowl weight · 24 h'), 24, ('bowl_weight',))]
@@ -330,11 +383,11 @@ def _groups(e, lang):
         (tr('Régulation hybride', 'Hybrid regulation'), 'mdi:chart-donut', [
             daily_balance_card(e, lang) if has_daily else distribution_progress(e, lang),
             rows(('simulation', 'budget', 'suggested_portions', 'decision'), tr('Complément simulé', 'Simulated supplement')),
-            history(tr('Croquettes · 48 h', 'Kibble · 48 h'), 48, ('intake_today', 'estimated_distributed')),
+            history(tr('Compteurs bruts · 48 h', 'Raw counters · 48 h'), 48, ('intake_today', 'estimated_distributed')),
         ]),
         (tr('Calibration et entretien', 'Calibration and maintenance'), 'mdi:cog-outline', [
-            calibration_card(e, lang),
-            rows(('calibration_enabled', 'configured_weight', 'calibration_weight', 'physical_reference', 'measured_weight', 'compensated_samples', 'compensated_weight')),
+            physical_card(e, lang) if 'physical_reference' in e else calibration_card(e, lang),
+            rows(('configured_weight', 'calibration_enabled', 'calibration_samples', 'measured_weight', 'compensated_samples', 'compensated_weight'), tr('Diagnostics de calibration','Calibration diagnostics')),
             health_card(e, lang),
             rows(('online', 'status_text', 'has_warning', 'has_fault', 'desiccant_days', 'battery_present', 'battery', 'child_lock', 'camera_enabled')),
             rows(('manual_enabled', 'manual_state', 'manual_pending', 'manual_result'), tr('Complément manuel', 'Manual supplement')),

@@ -151,11 +151,18 @@
           "missing_boundary": "mdi:calendar-alert",
           "inconsistent": "mdi:alert-circle-outline",
           "unavailable": "mdi:help-circle-outline",
-          "storage_error": "mdi:database-alert-outline"
+          "storage_error": "mdi:database-alert-outline",
+          "excluded": "mdi:calendar-remove-outline"
         }
       },
       "physical_reference": {
         "default": "mdi:scale-balance"
+      },
+      "scheduled_daily_portions": {
+        "default": "mdi:calendar-clock"
+      },
+      "scheduled_daily_weight": {
+        "default": "mdi:scale"
       }
     },
     "binary_sensor": {

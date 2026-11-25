@@ -64,3 +64,17 @@ record_physical_calibration:
       required: true
       selector:
         boolean:
+mark_feeding_day:
+  target:
+    entity:
+      integration: mova_nutripal
+      domain: sensor
+  fields:
+    measurement_date:
+      required: true
+      selector:
+        date:
+    reason:
+      required: true
+      selector:
+        text:

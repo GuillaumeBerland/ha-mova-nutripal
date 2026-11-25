@@ -52,3 +52,25 @@ The daily balance is diagnostic only: consumed grams plus current bowl weight mi
 ## Physical weighing reference (alpha.6)
 
 The configured portion weight is the sole reference used for estimates, simulation and manual command guards. Existing configured values are preserved (including the previous 9 g default); adjust the reference explicitly after weighing. Automatic calibration still collects diagnostics when enabled but no median overrides this setting. To record a physical weighing series, use `mova_nutripal.record_physical_calibration`, targeting the existing valid calibration samples sensor. Supply `measurement_date`, `trials` (3–30 objects with `portions` and `grams`, net kibble weight), and `confirmed: true`. Keep manual supplementation disabled and confirm animals could not eat during weighing. Up to ten series are stored; identical retained series are rejected. The suggested reference is the total grams divided by total portions rounded to 0.1 g. The new suggested physical reference sensor exposes the series and whether the latest proposal matches the configured reference. To apply a proposal, explicitly set the existing portion reference number or integration option. Recording alone never changes settings or dispenses food; it requests a normal refresh. Resetting the classical calibration does not erase physical series. Existing measurements and daily history are preserved.
+
+### Representative feeding days (0.2.5-beta.1)
+
+The configured reference remains the only feeding reference; automatic calibration
+is diagnostic only. The normal daily program is a separate estimate calculated
+from the currently supported daily schedule and configured grams per portion. It
+is not an actual dispensing measurement, and excludes extra/manual test portions.
+
+Physical weighing series automatically flag their dates within the 30-day history
+window as non-representative (even for an existing series after upgrading). To
+flag another day, use the `mova_nutripal.mark_feeding_day` action targeting the
+feeding history count sensor (`daily_history_count`). Supply `measurement_date`
+(local MOVA date, within 30 days) and `reason` (1–120 characters). This does not
+reset or correct MOVA counters, change the feeding plan or trigger dispensing.
+Raw observations remain available; marked days have no published representative
+reconstruction or corrected forecast. Archived rows retain their raw values and
+carry an `excluded_reason` attribute; consumers must filter these rows before
+calculating statistics. No retroactive history is invented. Marks expire with
+the 30-day history window; there is not yet an unmark action.
+
+The beta still requires real-world validation of the midnight boundary, diagnostic
+history and camera behavior. Automatic supplementation remains simulation only.
