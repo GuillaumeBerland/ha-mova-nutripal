@@ -28,6 +28,7 @@ OPTIONAL = {
     'binary_sensor': ('battery_present', 'child_lock', 'camera_enabled', 'manual_enabled'),
     'camera': ('camera_snapshot',),
     'calendar': ('meal_calendar',),
+    'number': ('reference_setting', 'target_setting'),
 }
 
 
@@ -105,11 +106,13 @@ LABELS = {
     'daily_difference': ('Écart reconst. / théorique', 'Reconstructed / theoretical difference'),
     'daily_portion_weight': ('Poids moyen reconst. / portion', 'Reconstructed mean / portion'),
     'daily_quality': ('Qualité du bilan', 'Balance quality'),
-    'scheduled_daily_weight': ('Programme (est.)', 'Program (est.)'),
+    'scheduled_daily_weight': ('Programme total (est.)', 'Total program (est.)'),
     'scheduled_daily_portions': ('Portions programmées', 'Scheduled portions'),
     'compensated_samples': ('Mesures compensées (exp.)', 'Compensated samples (exp.)'),
     'compensated_weight': ('Médiane compensée (exp.)', 'Compensated median (exp.)'),
     'camera_snapshot': ('Ouvrir la caméra', 'Open camera'),
+    'reference_setting': ('Poids de référence par portion', 'Reference weight per portion'),
+    'target_setting': ('Objectif journalier', 'Daily target'),
 }
 
 
@@ -404,29 +407,202 @@ def make_card(e, lang='fr'):
     return {'type': 'vertical-stack', 'cards': cards}
 
 
+def overview_card(e, lang):
+    """Show schedule progress separately from raw or reconstructed dispensing."""
+    def tr(a, b): return a if lang == 'fr' else b
+    ids = []
+    lines = []
+    for var, key in (('t','target'), ('p','scheduled_daily_weight'), ('sp','scheduled_daily_portions'),
+                     ('rem','remaining_portions'), ('w','calibration_weight'), ('proposed','physical_reference'),
+                     ('d','estimated_distributed'), ('r','daily_reconstructed'), ('c','daily_corrected_forecast')):
+        if key in e:
+            ids.append(e[key]); lines.append("{% set "+var+" = states('"+e[key]+"')|float(none) %}")
+        else:
+            lines.append("{% set "+var+" = none %}")
+    for var, key in (('q','daily_quality'), ('mode','simulation'), ('decision','decision'), ('online','online')):
+        if key in e:
+            ids.append(e[key]); lines.append("{% set "+var+" = states('"+e[key]+"') %}")
+        else:
+            lines.append("{% set "+var+" = none %}")
+    lines += ["{% if q == 'excluded' %}",
+              tr('⚠️ **Journée non représentative** — essais ou manipulations signalés. Le programme reste visible ; les compteurs bruts ne représentent pas les repas normaux.', '⚠️ **Non-representative day** — trials or handling flagged. The program remains visible; raw counters do not represent normal meals.'), "{% endif %}",
+              "{% if mode != 'on' %}", tr('⚠️ Mode simulation non confirmé.', '⚠️ Simulation mode not confirmed.'), "{% endif %}",
+              "{% set valid_program = is_number(p) and p >= 0 and is_number(sp) and sp >= 0 and sp == sp|int and is_number(w) and w > 0 and (p-sp*w)|abs <= 0.02 %}",
+              "{% set valid_progress = valid_program and online == 'on' and decision in ['device_not_ready','budget_reached','meal_soon','bowl_not_empty','would_feed'] and is_number(rem) and 0 <= rem <= sp and rem == rem|int %}",
+              "{% if valid_program %}",
+              "{% if valid_progress %}",
+              "{% set done = ((sp-rem)*w)|round(2) %}{% set left = (rem*w)|round(2) %}",
+              tr('**Repas programmés signalés terminés (est.)**', '**Scheduled meals reported complete (est.)**'),
+              "## {{ '%g'|format(done) }} g{% if is_number(t) and t > 0 %} / {{ '%g'|format(t) }} g{% endif %}\n",
+              "{% if is_number(t) and t > 0 %}",
+              "{% set filled = [[(10*done/t)|int,0]|max,10]|min %}",
+              "{% set total = [[(10*p/t)|int,filled]|max,10]|min %}",
+              "{{ '🟦'*filled }}{{ '🟧'*(total-filled) }}{{ '⬜'*(10-total) }}\n", "{% endif %}",
+              tr('🟦 Terminés (est.) :', '🟦 Complete (est.):')+" **{{ '%g'|format(done) }} g** · {{ (sp-rem)|int }} "+tr('portions','portions')+"\n",
+              tr('🟧 À distribuer (est.) :', '🟧 Remaining (est.):')+" **{{ '%g'|format(left) }} g** · {{ rem|int }} "+tr('portions','portions')+"\n",
+              "{% else %}", tr('Progression du programme indisponible — repas terminés non confirmés.', 'Program progress unavailable — completed meals not confirmed.'), "{% endif %}\n",
+              tr('**Programme total (inclut les repas restants) :**', '**Total program (includes remaining meals):**')+" **{{ '%g'|format(p) }} g** · {{ sp|int }} "+tr('portions','portions')+"\n",
+              "{% if is_number(t) and t > 0 %}",
+              tr('Objectif couvert par le programme :', 'Target covered by program:')+" {{ (100*p/t)|round(1) }} %\n",
+              "{% if p > t %}", tr('⚠️ Programme au-dessus de l’objectif de', '⚠️ Program exceeds target by')+" {{ '%g'|format((p-t)|round(2)) }} g.", "{% endif %}", "{% endif %}",
+              "{% else %}", tr('Programme quotidien indisponible.', 'Daily program unavailable.'), "{% endif %}\n",
+              "{% if is_number(w) and w > 0 %}", tr('Référence utilisée :', 'Reference in use:')+" **{{ '%g'|format(w) }} g/portion**\n",
+              "{% if is_number(proposed) and proposed > 0 and (w-proposed)|abs > 0.001 %}",
+              tr('⚠️ Pesées :', '⚠️ Physical trials:')+" **{{ '%g'|format(proposed) }} g/portion** — "+tr('réglage à appliquer dans l’intégration.', 'apply the setting in the integration.'), "{% endif %}{% endif %}\n",
+              "{% if q == 'reconstructed' and is_number(r) and r >= 0 %}",
+              tr('Distribution reconstituée (est., toutes distributions) :', 'Reconstructed dispensing (est., all dispensing):')+" **{{ '%g'|format(r) }} g**\n",
+              "{% if is_number(c) and c >= r %}", tr('Prévision reconstituée indicative :', 'Indicative reconstructed forecast:')+" **{{ '%g'|format(c) }} g**\n", "{% endif %}",
+              "{% elif q != 'excluded' and is_number(d) and d >= 0 %}",
+              tr('Distribution totale théorique (est., toutes distributions) :', 'Total theoretical dispensing (est., all dispensing):')+" **{{ '%g'|format(d) }} g**\n",
+              tr('Bilan reconstitué indisponible.', 'Reconstructed balance unavailable.'), "{% endif %}\n",
+              "{% if mode == 'on' %}", tr('Simulation uniquement · aucun complément automatique.', 'Simulation only · no automatic supplement.'), "{% endif %}"]
+    return dict(_markdown('\n'.join(lines), ids), title=tr('Alimentation du jour','Today’s feeding'))
+
+
+def consumption_card(e, lang):
+    """Keep raw consumption accessible in Technical; flag excluded days on Home."""
+    def tr(a,b): return a if lang == 'fr' else b
+    today, yesterday = e['intake_today'], e['intake_yesterday']
+    ids = [today, yesterday]
+    q, hist = e.get('daily_quality'), e.get('daily_history_count')
+    lines = ["{% set today = states('"+today+"')|float(none) %}",
+             "{% set yesterday = states('"+yesterday+"')|float(none) %}"]
+    if q:
+        ids.append(q)
+        lines.append("{% set excluded = states('"+q+"') == 'excluded' %}")
+    else:
+        lines.append("{% set excluded = false %}")
+    if hist:
+        ids.append(hist)
+        lines.append("{% set yesterday_excluded = state_attr('"+hist+"', 'yesterday_excluded') == true %}")
+    else:
+        lines.append("{% set yesterday_excluded = false %}")
+    lines += [tr('**Aujourd’hui :**', '**Today:**')+" {% if excluded %}"+tr('⚠️ Non représentatif — voir Technique.', '⚠️ Non-representative — see Technical.')+"{% elif is_number(today) and today >= 0 %}**{{ '%g'|format(today) }} g**{% else %}—{% endif %}\n",
+              tr('**Hier :**', '**Yesterday:**')+" {% if yesterday_excluded %}"+tr('⚠️ Non représentatif — voir Historique.', '⚠️ Non-representative — see History.')+"{% elif is_number(yesterday) and yesterday >= 0 %}**{{ '%g'|format(yesterday) }} g**{% else %}—{% endif %}\n",
+              tr('Valeurs déclarées par MOVA, pas une pesée indépendante.', 'MOVA-reported values, not independent weighing.')]
+    return dict(_markdown('\n'.join(lines), ids), title=tr('Consommation','Intake'))
+
+
+def planning_card(e, lang):
+    """Display only the already validated daily schedule, not historical events."""
+    def tr(a,b): return a if lang == 'fr' else b
+    remaining, weight, portions, planned = (e[k] for k in ('remaining_portions','calibration_weight','scheduled_daily_portions','scheduled_daily_weight'))
+    lines = ["{% set slots = state_attr('"+remaining+"', 'schedule') or [] %}",
+             "{% set w = states('"+weight+"')|float(none) %}",
+             "{% set p = states('"+portions+"')|int(none) %}",
+             "{% set g = states('"+planned+"')|float(none) %}",
+             "{% if p is not none and p >= 0 and is_number(g) and is_number(w) and w > 0 %}",
+             "{% set active = slots|selectattr('status','equalto',true)|list %}",
+             "{% if active|sum(attribute='portions') == p %}",
+             "| "+tr('Heure | Portions | Poids estimé','Time | Portions | Estimated weight')+" |", "|---|---:|---:|",
+             "{% for row in active|sort(attribute='feedingTime') -%}",
+             "| {{ row.feedingTime[:5] }} | {{ row.portions }} | {{ '%g'|format((row.portions*w)|round(1)) }} g |",
+             "{% endfor %}", "{% endif %}\n",
+             tr('**Total quotidien :**','**Daily total:**')+" {{ p }} "+tr('portions','portions')+" · **{{ '%g'|format(g) }} g**",
+             "{% else %}", tr('Programme quotidien indisponible ou non pris en charge.', 'Daily program unavailable or unsupported.'), "{% endif %}",
+             tr('Horaires programmés, pas une confirmation de distribution.', 'Scheduled times, not confirmation of dispensing.')]
+    return dict(_markdown('\n'.join(lines), [remaining,weight,portions,planned]), title=tr('Programme alimentaire','Feeding program'))
+
+
+def weekly_card(e, lang):
+    """Seven most recent archived days; native Markdown, no extra recorder queries."""
+    def tr(a,b): return a if lang == 'fr' else b
+    hist = e['daily_history_count']
+    lines = ["{% set rows = state_attr('"+hist+"', 'days') or [] %}",
+             tr('🟩 Reconstitué · 🟦 Théorique · 🟪 Consommation MOVA', '🟩 Reconstructed · 🟦 Theoretical · 🟪 MOVA intake'),
+             "{% for row in rows[-7:]|reverse %}", "**{{ row.day }}**\n",
+             "{% if row.excluded_reason is defined and row.excluded_reason %}", tr('⚠️ Journée non représentative.', '⚠️ Non-representative day.'),
+             "{% elif row.quality == 'reconstructed' and is_number(row.target) and row.target > 0 %}",
+             "{% for key, color in [('reconstructed','🟩'),('theoretical','🟦'),('consumed','🟪')] %}",
+             "{% if is_number(row[key]) and row[key] >= 0 %}",
+             "{% set n = [[(10*row[key]/row.target)|int,0]|max,10]|min %}",
+             "{{ color*n }}{{ '⬜'*(10-n) }} **{{ '%g'|format(row[key]) }} g**\n",
+             "{% endif %}{% endfor %}",
+             "{% else %}", tr('Bilan incomplet — voir le détail.', 'Incomplete balance — see details.'), "{% endif %}\n",
+             "{% else %}", tr('Aucun bilan archivé.', 'No archived balances.'), "{% endfor %}",
+             tr('Chaque barre représente l’objectif de la journée ; les valeurs restent affichées au-delà de 100 %.', 'Each bar represents the daily target; values above 100% remain visible.')]
+    return dict(_markdown('\n'.join(lines), [hist]), title=tr('7 derniers bilans','Last 7 archived balances'))
+
+
+def configuration_card(e, lang):
+    """Native number controls; only the two explicit configuration settings are editable."""
+    keys = ('reference_setting', 'target_setting')
+    rows = [{'entity': e[k], 'name': LABELS[k][0 if lang == 'fr' else 1]} for k in keys if k in e]
+    if not rows:
+        return None
+    return {'type': 'entities', 'title': 'Configuration alimentaire' if lang == 'fr' else 'Feeding settings',
+            'show_header_toggle': False, 'entities': rows}
+
+
+def midnight_card(e, lang):
+    """Explain the last midnight decision without inventing unavailable observations."""
+    if 'daily_quality' not in e:
+        return None
+    q = e['daily_quality']
+    def tr(a,b): return a if lang == 'fr' else b
+    reasons = {
+        'non_adjacent_day': tr('Jours non consécutifs','Non-adjacent days'),
+        'before_outside_window': tr('Dernier relevé avant minuit trop ancien','Pre-midnight reading too old'),
+        'after_outside_window': tr('Premier relevé après minuit trop tardif','Post-midnight reading too late'),
+        'yesterday_intake_mismatch': tr('Consommation de la veille non concordante','Yesterday intake mismatch'),
+        'yesterday_portions_mismatch': tr('Portions de la veille non concordantes','Yesterday portion mismatch'),
+        'today_counters_not_zero': tr('Compteurs du jour non remis à zéro','Today counters not reset'),
+        'bowl_changed': tr('Poids du bol différent','Bowl weight changed'),
+        'retry_window_or_observations_changed': tr('Délai ou mesures modifiés pendant la vérification','Retry window or readings changed'),
+        'yesterday_counters_changed': tr('Compteurs de la veille supérieurs au dernier relevé','Yesterday counters exceed last reading'),
+    }
+    lines = ["{% set b = state_attr('"+q+"', 'midnight_boundary') or {} %}",
+             "{% if b %}",
+             "{% if b.status == 'confirmed' %}", tr('🟢 Limite de journée confirmée.', '🟢 Day boundary confirmed.'),
+             "{% elif b.status == 'retry' %}", tr('🟠 Vérification des compteurs de la veille en cours.', '🟠 Checking delayed yesterday counters.'),
+             "{% else %}", tr('⚠️ Limite de journée non validée.', '⚠️ Day boundary not validated.'), "{% endif %}",
+             "{% for reason in b.reasons %}"]
+    for i,(key,label) in enumerate(reasons.items()):
+        lines.append(('{% if ' if i == 0 else '{% elif ') + "reason == '"+key+"' %}\n- "+label)
+    lines += ["{% else %}\n- {{ reason }}{% endif %}", "{% endfor %}",
+              tr('Avant :','Before:')+" {{ b.before.day }} {{ b.before.ts | timestamp_custom('%H:%M:%S', true) }} · {{ b.before.bowl }} g",
+              tr('Après :','After:')+" {{ b.after.day }} {{ b.after.ts | timestamp_custom('%H:%M:%S', true) }} · {{ b.after.bowl }} g",
+              "{% else %}", tr('Aucun diagnostic de minuit enregistré depuis cette mise à jour.', 'No midnight diagnostic recorded since this update.'), "{% endif %}"]
+    return dict(_markdown('\n'.join(lines),[q]),title=tr('Diagnostic du passage à minuit','Midnight boundary diagnostics'))
+
+
 def make_dashboard(e, lang='fr', title='MOVA NutriPal'):
-    """Keep the three thematic sections in order on narrow screens."""
-    sections = [{'type': 'grid', 'cards': [
-        {'type': 'heading', 'heading': heading, 'icon': icon, 'heading_style': 'title'},
-        *[dict(card, grid_options={'columns': 'full'}) for card in cards],
-    ]} for heading, icon, cards in _groups(e, lang)]
-    views = [{
-        'title': 'Alimentation' if lang == 'fr' else 'Feeding',
-        'path': 'feeding', 'icon': 'mdi:paw', 'type': 'sections',
-        'max_columns': 3, 'dense_section_placement': False, 'sections': sections,
-    }]
+    """V5: everyday essentials first, optional planning/history, diagnostics last."""
+    def tr(a,b): return a if lang == 'fr' else b
+    def section(heading, icon, contents):
+        return {'type':'grid', 'cards':[{'type':'heading','heading':heading,'icon':icon,'heading_style':'title'},
+                 *[dict(card, grid_options={'columns':'full'}) for card in contents]]}
+    def view(label,path,icon,sections,columns=2):
+        return dict(title=label,path=path,icon=icon,type='sections',max_columns=columns,
+                    dense_section_placement=False,sections=sections)
+    feeding, regulation, maintenance = _groups(e,lang)
+    feed, reg, tech = feeding[2], regulation[2], maintenance[2]
+    # Keep only bowl and full program tiles. Consumption gets an exclusion-aware summary.
+    tiles = dict(feed[0], cards=[c for c in feed[0]['cards']
+                 if c['entity'] in (e['bowl_weight'], e.get('scheduled_daily_weight'))])
+    essentials = [tiles, overview_card(e,lang), consumption_card(e,lang)]
+    daily = [feed[1], *[c for c in feed if c.get('entity') == e.get('camera_snapshot') and c.get('entity')],
+             tech[2], feed[3]]
+    views = [view(tr('Accueil','Home'),'feeding','mdi:paw',[
+        section(tr('Alimentation','Feeding'),'mdi:paw',essentials),
+        section(tr('Prochain repas et caméra','Next meal and camera'),'mdi:calendar-clock',daily)])]
+    planning = []
+    if all(k in e for k in ('scheduled_daily_weight','scheduled_daily_portions')):
+        planning.append(section(tr('Programme','Program'),'mdi:calendar-clock',[planning_card(e,lang)]))
     if 'meal_calendar' in e:
-        views.append({
-            'title': 'Repas programmés' if lang == 'fr' else 'Scheduled meals',
-            'path': 'meals', 'icon': 'mdi:calendar-clock', 'type': 'panel',
-            'cards': [{'type': 'calendar', 'entities': [e['meal_calendar']],
-                       'initial_view': 'listWeek'}],
-        })
+        planning.append(section(tr('Calendrier','Calendar'),'mdi:calendar',[{'type':'calendar','entities':[e['meal_calendar']],'initial_view':'listWeek'}]))
+    if planning:
+        views.append(view(tr('Planning','Schedule'),'meals','mdi:calendar-clock',planning,1))
+    history = []
     if 'daily_history_count' in e and 'daily_quality' in e:
-        views.append({'title': 'Historique alimentaire' if lang == 'fr' else 'Feeding history',
-                      'path': 'feeding-history', 'icon': 'mdi:calendar-text', 'type': 'panel',
-                      'cards': [daily_history_card(e, lang)]})
-    return {'title': title, 'views': views}
+        history.append(section(tr('Bilans quotidiens','Daily balances'),'mdi:chart-bar',[weekly_card(e,lang),daily_history_card(e,lang)]))
+    history.append(section(tr('Évolution des compteurs','Counter history'),'mdi:chart-line',[reg[2]]))
+    views.append(view(tr('Historique','History'),'feeding-history','mdi:calendar-text',history,1))
+    views.append(view(tr('Technique','Technical'),'technical','mdi:cog-outline',[
+        section(tr('Régulation hybride','Hybrid regulation'),'mdi:chart-donut',[reg[0], *([midnight_card(e,lang)] if midnight_card(e,lang) else []), reg[1],feed[2]]),
+        section(tr('Calibration et entretien','Calibration and maintenance'),'mdi:scale',[tech[0], *([configuration_card(e,lang)] if configuration_card(e,lang) else []), tech[1]]),
+        section(tr('État et commandes','Status and commands'),'mdi:shield-check',[tech[3],tech[4]])],3))
+    return {'title':title,'views':views}
 
 
 def main():

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import unittest
 
-from test_dashboard_layout import dashboard, registry
+from test_dashboard_layout import dashboard, registry, cards
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('calendar_schedule', ROOT / 'custom_components/mova_nutripal/calendar_schedule.py')
@@ -87,21 +87,23 @@ class MealCalendarTests(unittest.TestCase):
 
     def test_calendar_view_optional_and_language(self):
         e = dashboard.find_entities(registry())
-        for lang, title in [('fr', 'Repas programmés'), ('en', 'Scheduled meals')]:
+        for lang, title in [('fr', 'Planning'), ('en', 'Schedule')]:
             result = dashboard.make_dashboard(e, lang)
-            self.assertEqual(len(result['views']), 3)
+            self.assertEqual(len(result['views']), 4)
             view = result['views'][1]
             self.assertEqual(view['title'], title)
-            self.assertEqual(view['cards'][0]['entities'], [e['meal_calendar']])
-            self.assertEqual(view['cards'][0]['type'], 'calendar')
-        self.assertEqual(len(dashboard.make_dashboard(dashboard.find_entities(registry(False)))['views']), 1)
+            calendar = [c for c in cards(view) if c['type'] == 'calendar']
+            self.assertEqual(len(calendar), 1)
+            self.assertEqual(calendar[0]['entities'], [e['meal_calendar']])
+        self.assertEqual(len(dashboard.make_dashboard(dashboard.find_entities(registry(False)))['views']), 3)
 
     def test_disabled_calendar_not_included(self):
         r = registry()
         for row in r['data']['entities']:
             if row['entity_id'].startswith('calendar.'):
                 row['disabled_by'] = 'user'
-        self.assertEqual([v['path'] for v in dashboard.make_dashboard(dashboard.find_entities(r))['views']], ['feeding', 'feeding-history'])
+        self.assertEqual([v['path'] for v in dashboard.make_dashboard(dashboard.find_entities(r))['views']], ['feeding', 'meals', 'feeding-history', 'technical'])
+        self.assertFalse(any(c['type'] == 'calendar' for c in cards(dashboard.make_dashboard(dashboard.find_entities(r)))))
 
 
 class CalendarEntityTests(unittest.IsolatedAsyncioTestCase):

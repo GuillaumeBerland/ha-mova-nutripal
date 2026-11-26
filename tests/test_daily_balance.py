@@ -143,14 +143,14 @@ class DailyTests(unittest.TestCase):
         self.assertEqual(e['daily_corrected_forecast'], 'sensor.renamed_daily_corrected_forecast')
         for lang in ('fr','en'):
             v=dashboard.make_dashboard(e,lang)
-            self.assertEqual(v['views'][-1]['path'],'feeding-history')
+            self.assertEqual(v['views'][2]['path'],'feeding-history')
             main=dashboard.daily_balance_card(e,lang)
             self.assertIn(e['daily_reconstructed'],main['entity_id'])
             self.assertIn(e['calibration_weight'],main['entity_id'])
             self.assertIn('🟩',main['content'])
-            self.assertIn(e['daily_history_count'],v['views'][-1]['cards'][0]['entity_id'])
+            self.assertIn(e['daily_history_count'],v['views'][2]['sections'][0]['cards'][2]['entity_id'])
         old=dashboard.make_dashboard(dashboard.find_entities(registry(False)))
-        self.assertEqual(len(old['views']),1)
+        self.assertEqual(len(old['views']),3)
         self.assertNotIn('daily_reconstructed',json.dumps(old))
 
 

@@ -14,7 +14,7 @@ from .calibration import Calibration, effective_weight, near_meal, number
 from .control import manual_allowed, confirm_pending
 from .compensated import CompensatedCalibration, append_observation, diagnostic_summary, observation_window
 from .presentation import next_scheduled_meal
-from .daily_balance import DailyBalance, load_daily
+from .daily_balance import DailyBalance, load_daily, near_midnight
 from .calendar_schedule import current_slots
 from .physical_calibration import build_series, append_series, summary as physical_summary
 
@@ -139,7 +139,7 @@ class NutriPalCoordinator(DataUpdateCoordinator):
                                       and pending is None and self.state['pending'] is None
                                       and observation_window(data, now))
                 # Passive calibration retains its original window; only diagnostics extend polling.
-                self.update_interval = timedelta(seconds=30 if fast else 60 if compensated_active else 300)
+                self.update_interval = timedelta(seconds=30 if fast else 60 if compensated_active or near_midnight(now) else 300)
                 if options['auto_calibration'] and fast:
                     baseline = self.cal.baseline
                     sample = self.cal.observe(data, now)

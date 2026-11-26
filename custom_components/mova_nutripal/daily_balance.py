@@ -9,6 +9,13 @@ import json
 TZ = ZoneInfo('Europe/Paris')  # Same day boundary as the cloud counters.
 MAX_BOUNDARY_SECONDS = 360
 MAX_DAYS = 30
+RETRY_BOUNDARY_SECONDS = 900
+
+
+def near_midnight(now):
+    local = now.astimezone(TZ)
+    seconds = local.hour * 3600 + local.minute * 60 + local.second
+    return seconds >= 86400 - 600 or seconds <= RETRY_BOUNDARY_SECONDS
 
 
 def _weight(v):
@@ -53,6 +60,7 @@ class DailyBalance:
         self.inconsistent = False
         self.history = []
         self.excluded_days = {}
+        self.boundary = {}
         if state is not None:
             # Diagnostic data are isolated from the actuator interlock.
             last = state['last']
@@ -82,6 +90,15 @@ class DailyBalance:
                            for day, reason in marks.items())):
                 raise ValueError('Invalid excluded days')
             self.excluded_days = deepcopy(marks)
+            diagnostic = state.get('boundary', {})
+            if diagnostic:
+                if (not isinstance(diagnostic, dict)
+                        or diagnostic.get('status') not in ('confirmed', 'retry', 'failed')
+                        or not _observation_valid(diagnostic.get('before'))
+                        or not _observation_valid(diagnostic.get('after'))
+                        or not isinstance(diagnostic.get('reasons'), list)):
+                    raise ValueError('Invalid boundary diagnostic')
+                self.boundary = deepcopy(diagnostic)
 
     def mark_day(self, day, today, reason):
         """Flag a non-representative day without changing raw observations."""
@@ -101,7 +118,7 @@ class DailyBalance:
 
     def export(self):
         return deepcopy(dict(last=self.last, opening=self.opening, inconsistent=self.inconsistent,
-                             history=self.history, excluded_days=self.excluded_days))
+                             history=self.history, excluded_days=self.excluded_days, boundary=self.boundary))
 
     def observe(self, data, now, duration, reference, target):
         """Return True when a fresh observation can be persisted.
@@ -125,11 +142,26 @@ class DailyBalance:
             adjacent = date.fromisoformat(o['day']) - date.fromisoformat(prev['day']) == timedelta(days=1)
             midnight = datetime.combine(now.date(), datetime.min.time(), TZ).timestamp()
             yesterday_intake, yesterday_portions = data.get('intake_yesterday'), data.get('portions_yesterday')
-            boundary = (adjacent and 0 <= midnight-prev['ts'] <= MAX_BOUNDARY_SECONDS
-                        and 0 <= o['ts']-midnight <= MAX_BOUNDARY_SECONDS
-                        and _weight(yesterday_intake) and _count(yesterday_portions)
-                        and yesterday_intake == prev['intake'] and yesterday_portions == prev['portions']
-                        and o['intake'] == 0 and o['portions'] == 0 and o['bowl'] == prev['bowl'])
+            checks = {
+                'non_adjacent_day': adjacent,
+                'before_outside_window': 0 <= midnight-prev['ts'] <= MAX_BOUNDARY_SECONDS,
+                'after_outside_window': 0 <= o['ts']-midnight <= MAX_BOUNDARY_SECONDS,
+                'yesterday_intake_mismatch': _weight(yesterday_intake) and yesterday_intake == prev['intake'],
+                'yesterday_portions_mismatch': _count(yesterday_portions) and yesterday_portions == prev['portions'],
+                'today_counters_not_zero': o['intake'] == 0 and o['portions'] == 0,
+                'bowl_changed': o['bowl'] == prev['bowl'],
+            }
+            reasons = [key for key, ok in checks.items() if not ok]
+            boundary = not reasons
+            # Retry ONLY delayed yesterday totals: today's counters must already be zero,
+            # the bowl unchanged, and both original observations within six minutes.
+            retry = (bool(reasons) and set(reasons) <= {'yesterday_intake_mismatch', 'yesterday_portions_mismatch'}
+                     and (not _weight(yesterday_intake) or yesterday_intake <= prev['intake'])
+                     and (not _count(yesterday_portions) or yesterday_portions <= prev['portions']))
+            self.boundary = dict(status='confirmed' if boundary else 'retry' if retry else 'failed',
+                                 reasons=reasons, before=deepcopy(prev), after=deepcopy(o),
+                                 yesterday_intake=yesterday_intake if _weight(yesterday_intake) else None,
+                                 yesterday_portions=yesterday_portions if _count(yesterday_portions) else None)
             complete = boundary and self.opening is not None and not self.inconsistent
             # Yesterday's counters are only attributable to the immediately preceding day.
             intake = yesterday_intake if adjacent and _weight(yesterday_intake) else None
@@ -142,11 +174,48 @@ class DailyBalance:
             self.opening = o['bowl'] if boundary else None
             self.inconsistent = False
         elif prev:
+            self._retry_boundary(o, prev, data, now)
             if o['portions'] < prev['portions'] or o['intake'] < prev['intake']:
                 self.inconsistent = True
         self.last = o
         self.prune_marks(now.date())
         return True
+
+    def _retry_boundary(self, o, prev, data, now):
+        b = self.boundary
+        if b.get('status') != 'retry':
+            return
+        before, first = b['before'], b['after']
+        midnight = datetime.combine(now.date(), datetime.min.time(), TZ).timestamp()
+        yi, yp = data.get('intake_yesterday'), data.get('portions_yesterday')
+        b['yesterday_intake'] = yi if _weight(yi) else None
+        b['yesterday_portions'] = yp if _count(yp) else None
+        # Check the original evidence again, including when restored after a restart.
+        safe = (first['day'] == o['day'] == prev['day']
+                and date.fromisoformat(o['day']) - date.fromisoformat(before['day']) == timedelta(days=1)
+                and 0 <= midnight-before['ts'] <= MAX_BOUNDARY_SECONDS
+                and 0 <= first['ts']-midnight <= MAX_BOUNDARY_SECONDS
+                and 0 <= o['ts']-midnight <= RETRY_BOUNDARY_SECONDS
+                and 0 < o['ts']-prev['ts'] <= MAX_BOUNDARY_SECONDS
+                and before['bowl'] == first['bowl'] == prev['bowl'] == o['bowl']
+                and first['intake'] == first['portions'] == prev['intake'] == prev['portions'] == o['intake'] == o['portions'] == 0
+                and not self.inconsistent and self.opening is None
+                and self.history and self.history[-1]['day'] == before['day'])
+        if not safe:
+            b.update(status='failed', reasons=['retry_window_or_observations_changed'])
+            return
+        if (_weight(yi) and yi > before['intake']) or (_count(yp) and yp > before['portions']):
+            b.update(status='failed', reasons=['yesterday_counters_changed'])
+            return
+        if not (_weight(yi) and yi == before['intake'] and _count(yp) and yp == before['portions']):
+            return
+        row = self.history[-1]
+        # A valid closing observation still does not repair a missing opening or a prior inconsistency.
+        status = 'inconsistent' if row['quality'] == 'inconsistent' else 'reconstructed' if row['opening'] is not None else 'missing_boundary'
+        self.history[-1] = _record(row['day'], yi, yp, row['opening'], before['bowl'],
+                                   row['reference'], row['target'], status)
+        self.opening = o['bowl']
+        b.update(status='confirmed', reasons=[], confirmed_at=o['ts'])
 
     def summary(self, data, now, fresh=True):
         """Publish only if the current raw snapshot matches the saved observation."""
@@ -173,7 +242,7 @@ class DailyBalance:
                     daily_corrected_forecast=corrected, daily_quality=r.get('quality', 'unavailable'),
                     daily_history_count=len(self.history),
                     daily_history=[dict(deepcopy(row), excluded_reason=self.excluded_days.get(row['day']))
-                                   for row in self.history], daily_current=r,
+                                   for row in self.history], daily_current=r, daily_boundary=deepcopy(self.boundary),
                     daily_excluded_days=deepcopy(self.excluded_days),
                     daily_yesterday_excluded=(now.astimezone(TZ).date()-timedelta(days=1)).isoformat() in self.excluded_days)
 

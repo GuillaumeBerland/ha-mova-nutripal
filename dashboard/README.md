@@ -1,8 +1,15 @@
 # Native MOVA NutriPal dashboard
 
-The generator produces either a complete responsive Sections dashboard (up to three columns on wide screens, fewer on small screens) or a single manual Lovelace card. Both are read-only: no dispensing, acknowledgement or setting controls. No frontend plugin or global theme is required. Entity icons and colors follow the integration and the active HA theme.
+The generator produces either a complete responsive Sections dashboard (up to three columns on wide screens, fewer on small screens) or a single manual Lovelace card. The single card is read-only. The full dashboard allows explicit edits to the existing reference weight and daily target in Technical; no dispensing or acknowledgement controls. No frontend plugin or global theme is required. Entity icons and colors follow the integration and the active HA theme.
 
-The V4 view follows three thematic columns: feeding and next meal, hybrid regulation and daily dispensing, and calibration with maintenance. Native Markdown cards highlight the next scheduled time, countdown, portion count and estimated grams; a ten-segment daily distribution bar distinguishes already dispensed kibble (blue), remaining scheduled estimate (orange), and unallocated target (white). The bar is capped at ten segments, while actual and forecast figures and percentages remain uncapped. Missing data is not treated as zero. The calibration card shows progress toward three initial valid samples and distinguishes disabled or unavailable calibration. The health summary also flags pending manual commands. History graphs show bowl weight over 24 hours and daily intake/estimated distribution over 48 hours. Daily counters reset at midnight; they are not rolling totals. No per-cat intake is inferred. Camera access is on demand via a tile without a live preview. No global theme or extra frontend plugin is required.
+## V5.2 dashboard layout (integration v0.2.5-beta.2)
+
+- **Home:** two responsive sections, two compact tiles, an exclusion-aware consumption summary, a scheduled-meal progress summary, next scheduled meal, on-demand camera, health summary and 24-hour bowl graph. The bar represents the scheduled meals reported complete (blue) and remaining (orange), not all dispensed food. The total includes remaining meals. Progress requires a coherent supported daily schedule and online status; inconsistent or unavailable data are not interpreted as completed meals. Reconstructed or total theoretical dispensing is shown separately on representative days. On excluded days raw intake is replaced by a warning on Home, but retained in Technical and History. The configured reference is visible, with a warning if it differs from the physical weighing proposal. No setting is applied automatically.
+- **Schedule:** daily program with estimated weights, plus the native calendar if enabled. No historical dispensing is inferred from planned events.
+- **History:** up to seven recent archived balances with native colored Markdown bars relative to each day's target, the full 30-day table, and raw 48-hour counter history. Excluded/incomplete days are not plotted as representative balances. Raw counters reset at midnight and may include calibration trials.
+- **Technical:** detailed daily balance, simulation, physical reference, diagnostic calibration, device status, maintenance and manual-command status. The native Configuration card exposes the reference weight and daily target if enabled. The midnight diagnostic card shows the last boundary decision and its reasons (beta.2). Other cards are read-only.
+
+The full dashboard uses existing paths (`feeding`, `meals`, `feeding-history`) and adds `technical`. Optional data and disabled entities are not guessed. The single-card format retains the previous detailed layout. No custom frontend, theme, integration update or HA restart is needed for dashboard-only changes.
 
 ## Generate locally
 
@@ -15,7 +22,7 @@ cat /tmp/mova-nutripal-dashboard.yaml
 
 Replace the SSH destination with your own. For English use `--language en`. For a single card use `--format card` (also the default, for compatibility). The script runs locally and reads registry data from standard input; do not upload or share the registry. It resolves actual entity IDs through the existing unique IDs, including renamed entities. For multiple feeders, pass `--device` with the selected HA device registry ID. Missing or disabled required entities are reported; optional entities, including the camera, are omitted rather than guessed.
 
-The complete dashboard optionally adds a second **Scheduled meals** view with the native calendar card when the enabled calendar entity exists for the selected feeder. The single-card format is unchanged. Calendar events are projections, not dispensing history.
+The Schedule view is included if the selected feeder has the daily program sensors or an enabled calendar. Calendar events are projections, not dispensing history.
 
 ## Install the generated configuration
 
@@ -29,17 +36,16 @@ Do not commit generated personal dashboards or registry data to the public repos
 
 ### Daily balance (alpha.4)
 
-Regenerate the dashboard after the new diagnostic sensors are created. The feeding view separates MOVA consumption, reconstructed dispensing, and theoretical estimates (including the reference weight). The optional Feeding history view shows archived dated totals, including incomplete days, with missing quantities displayed as unknown. The first complete day requires both observed midnight boundaries. No historical reconstruction is attempted for days before installation. No dashboard action changes feeding settings or dispenses food.
+Regenerate the dashboard after the new diagnostic sensors are created. The feeding view separates MOVA consumption, reconstructed dispensing, and theoretical estimates (including the reference weight). The optional Feeding history view shows archived dated totals, including incomplete days, with missing quantities displayed as unknown. The first complete day requires both observed midnight boundaries. No historical reconstruction is attempted for days before installation. No dashboard action dispenses food. Reference weight and target can be edited explicitly in Technical (V5.2).
 
 Since alpha.6, the configured reference is authoritative and automatic calibration medians are diagnostic only. The optional physical weighing proposal is displayed separately from the active reference. Regenerate after updating.
 
 ### Beta dashboard
 
 The main view prioritizes the current daily schedule and the configured physical
-reference. If a reconstructed balance is unavailable, the colored summary shows
-the estimated daily program (or explicitly labeled theoretical counts if the new
-program sensors are unavailable). A marked day displays a non-representative
-warning and the unmodified raw counters, not a representative balance. The
+reference. If a reconstructed balance is unavailable, the main colored summary still shows
+scheduled progress when the plan is coherent. A marked day displays a non-representative
+warning on Home; unmodified raw counters remain in Technical and History. The
 history view labels excluded rows; the physical card displays the latest recorded
 weighing series and whether its proposed value matches the configured reference.
 The three-sample diagnostic progress is no longer the main calibration card when

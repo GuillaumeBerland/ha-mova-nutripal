@@ -117,6 +117,7 @@ class NutriPalSensor(NutriPalEntity, SensorEntity):
                     "yesterday_excluded": self.coordinator.data.get("daily_yesterday_excluded", False)}
         if self.key == "daily_quality":
             return {"current": self.coordinator.data.get("daily_current", {}), "diagnostic_only": True,
+                    "midnight_boundary": self.coordinator.data.get("daily_boundary", {}),
                     "excluded_days": self.coordinator.data.get("daily_excluded_days", {})}
         if self.key == "compensated_samples":
             return {"diagnostic_only": True, "used_for_feeding": False,

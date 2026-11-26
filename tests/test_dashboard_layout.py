@@ -40,10 +40,10 @@ class DashboardLayoutTests(unittest.TestCase):
         self.assertEqual(result['title'], 'Luna & Mia')
         view = result['views'][0]
         self.assertEqual(view['type'], 'sections')
-        self.assertEqual(view['max_columns'], 3)
-        self.assertEqual(len(view['sections']), 3)
+        self.assertEqual(view['max_columns'], 2)
+        self.assertEqual(len(view['sections']), 2)
         self.assertEqual([section['cards'][0]['heading'] for section in view['sections']],
-                         ['Alimentation', 'Régulation hybride', 'Calibration et entretien'])
+                         ['Alimentation', 'Prochain repas et caméra'])
         self.assertTrue(all(c['grid_options']['columns'] == 'full' for section in view['sections'] for c in section['cards'][1:]))
         self.assertTrue(all(section['cards'][0]['type'] == 'heading' for section in view['sections']))
 
@@ -65,7 +65,7 @@ class DashboardLayoutTests(unittest.TestCase):
         e = dashboard.find_entities(r)
         self.assertNotIn('camera_snapshot', e)
         self.assertNotIn('camera.', json.dumps(dashboard.make_dashboard(e)))
-        self.assertEqual(len(dashboard.make_dashboard(dashboard.find_entities(registry(False)))['views'][0]['sections']), 3)
+        self.assertEqual(len(dashboard.make_dashboard(dashboard.find_entities(registry(False)))['views'][0]['sections']), 2)
 
     def test_camera_from_other_feeder_is_not_used(self):
         r = registry(False)
@@ -77,8 +77,12 @@ class DashboardLayoutTests(unittest.TestCase):
         e = dashboard.find_entities(registry())
         for result in (dashboard.make_card(e), dashboard.make_dashboard(e)):
             encoded = json.dumps(result)
-            for forbidden in ('private_did', 'private_device', 'button.', 'number.', 'call-service', 'perform-action', 'custom:', 'card_mod'):
+            for forbidden in ('private_did', 'private_device', 'button.', 'call-service', 'perform-action', 'custom:', 'card_mod'):
                 self.assertNotIn(forbidden, encoded)
+            if result.get('views'):
+                self.assertNotIn('number.', json.dumps(result['views'][0]))
+            else:
+                self.assertNotIn('number.', encoded)
             for c in cards(result):
                 if c['type'] == 'tile' and not c['entity'].startswith('camera.'):
                     self.assertNotIn('icon', c)
@@ -108,9 +112,9 @@ class DashboardLayoutTests(unittest.TestCase):
 
     def test_camera_in_feeding_and_health_in_maintenance(self):
         e = dashboard.find_entities(registry())
-        feeding, _, maintenance = dashboard.make_dashboard(e)['views'][0]['sections']
-        self.assertTrue(any(c.get('entity') == e['camera_snapshot'] for c in cards(feeding)))
-        self.assertIn(e['online'], json.dumps(maintenance))
+        view = dashboard.make_dashboard(e)['views'][0]
+        self.assertTrue(any(c.get('entity') == e['camera_snapshot'] for c in cards(view)))
+        self.assertIn(e['online'], json.dumps(view))
 
     def test_progress_uses_distribution_forecast_and_target_not_intake(self):
         e = dashboard.find_entities(registry())
@@ -144,3 +148,74 @@ class DashboardLayoutTests(unittest.TestCase):
         self.assertIn("pending == 'on'", c['content'])
         self.assertIn("fault == 'off' and warning == 'off'", c['content'])
         self.assertIn('État à vérifier', c['content'])
+
+    def test_v5_essentials_only_and_stable_paths(self):
+        e = dashboard.find_entities(registry())
+        for lang, labels in [('fr', ['Accueil','Planning','Historique','Technique']),
+                             ('en', ['Home','Schedule','History','Technical'])]:
+            views = dashboard.make_dashboard(e,lang)['views']
+            self.assertEqual([v['title'] for v in views], labels)
+            self.assertEqual([v['path'] for v in views], ['feeding','meals','feeding-history','technical'])
+            home = json.dumps(views[0]); tech = json.dumps(views[-1])
+            for k in ('budget','compensated_weight','desiccant_days','calibration_samples','manual_result'):
+                self.assertNotIn(e[k],home); self.assertIn(e[k],tech)
+            self.assertNotIn('calendar.',home)
+            self.assertIn(e['bowl_weight'],home)
+            self.assertIn(e['intake_yesterday'],home)
+
+    def test_v5_summary_distinguishes_sources_and_excluded_days(self):
+        e = dashboard.find_entities(registry())
+        for lang in ('fr','en'):
+            card = dashboard.overview_card(e,lang)
+            for token in ("q == 'reconstructed'", "q != 'excluded'", "q == 'excluded'", 'valid_progress', '🟦', '🟧', '(sp-rem)*w', 'is_number(p)'):
+                self.assertIn(token,card['content'])
+            self.assertIn(e['scheduled_daily_weight'],card['entity_id'])
+        fallback = dashboard.overview_card(dashboard.find_entities(registry(False)), 'fr')
+        self.assertNotIn('sensor.renamed_daily_', fallback['content'])
+
+    def test_v5_planning_uses_validated_program_and_dynamic_schedule(self):
+        e = dashboard.find_entities(registry())
+        card = dashboard.planning_card(e,'fr')
+        self.assertIn(e['remaining_portions'],card['entity_id'])
+        self.assertIn(e['scheduled_daily_portions'],card['entity_id'])
+        self.assertIn("active|sum(attribute='portions') == p", card['content'])
+        self.assertNotIn('02:00',card['content'])
+
+    def test_v5_weekly_history_excludes_atypical_and_incomplete_days(self):
+        e = dashboard.find_entities(registry())
+        card = dashboard.weekly_card(e,'fr')
+        self.assertEqual(card['entity_id'],[e['daily_history_count']])
+        for token in ('rows[-7:]','row.excluded_reason',"row.quality == 'reconstructed'",'row.target > 0','Bilan incomplet'):
+            self.assertIn(token,card['content'])
+
+    def test_v51_progress_uses_schedule_not_raw_counter(self):
+        e = dashboard.find_entities(registry())
+        c = dashboard.overview_card(e, 'fr')
+        self.assertIn("decision in ['device_not_ready','budget_reached','meal_soon','bowl_not_empty','would_feed']", c['content'])
+        self.assertIn('0 <= rem <= sp', c['content'])
+        self.assertIn('(p-sp*w)|abs <= 0.02', c['content'])
+        self.assertIn('(sp-rem)*w', c['content'])
+        self.assertNotIn(e['portions_today'], c['content'])
+        self.assertIn('Programme total (inclut les repas restants)', c['content'])
+        self.assertIn('Progression du programme indisponible', c['content'])
+
+    def test_v51_reference_mismatch_is_visible_but_read_only(self):
+        e = dashboard.find_entities(registry())
+        for lang in ('fr', 'en'):
+            c = dashboard.overview_card(e, lang)
+            self.assertIn(e['physical_reference'], c['entity_id'])
+            self.assertIn(e['calibration_weight'], c['entity_id'])
+            self.assertIn('(w-proposed)|abs > 0.001', c['content'])
+            self.assertNotIn('number.', json.dumps(c))
+
+    def test_v51_consumption_exclusion_and_raw_access(self):
+        e = dashboard.find_entities(registry())
+        views = dashboard.make_dashboard(e)['views']
+        for c in cards(views[0]):
+            if c['type'] == 'tile':
+                self.assertNotIn(c['entity'], (e['intake_today'], e['intake_yesterday']))
+        c = dashboard.consumption_card(e, 'fr')
+        self.assertIn("{% if excluded %}", c['content'])
+        self.assertIn("{% if yesterday_excluded %}", c['content'])
+        self.assertIn(e['intake_today'], json.dumps(views[-1]))
+        self.assertIn(e['intake_yesterday'], json.dumps(views[2]))
