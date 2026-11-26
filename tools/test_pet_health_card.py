@@ -64,6 +64,12 @@ def run(browser):
     page.evaluate('''()=>{card.old.value='2024-10-31';card.old.dispatchEvent(new Event('change'));}''')
     assert page.evaluate('card.gross.value') == '5.25'
     assert not page.evaluate('card.replace.checked')
+    assert page.evaluate('card.day.readOnly')
+    page.evaluate("card.day.value='2024-10-29'")
+    root.get_by_role('button',name='Enregistrer la pesée').click()
+    assert page.evaluate('calls.length') == 1
+    assert 'ne peut pas être déplacée' in root.locator('ha-card').inner_text()
+    page.evaluate("card.day.value='2024-10-31'")
     page.evaluate('''()=>{card.replace.checked=true;card.gross.value='5.26';}''')
     page.once('dialog', lambda dialog: dialog.dismiss())
     root.get_by_role('button',name='Enregistrer la pesée').click()
@@ -101,6 +107,18 @@ def run(browser):
     assert page.evaluate('card.foodFields.length') == 2
     assert page.evaluate('card.foodPortion.value') == '6.8'
     assert not page.evaluate('card.foodReplace.checked')
+    assert page.evaluate('card.foodDate.readOnly')
+    page.evaluate("card.foodDate.value='2024-10-30'")
+    root.get_by_role('button',name='Enregistrer la période alimentaire').click()
+    assert page.evaluate('calls.length') == 4
+    assert 'ne peut pas être déplacée' in root.locator('ha-card').inner_text()
+    page.evaluate("card.foodDate.value='2024-10-31'")
+    # Histories stay expanded across an incoming state refresh and period change.
+    page.evaluate("""()=>{card.summary.querySelector('[data-history-key="weight:cat_a"]').open=true;card.summary.querySelector('[data-history-key="food"]').open=true;hass.states['sensor.hub']={...hass.states['sensor.hub']};card.hass=hass;}""")
+    assert root.locator('details[data-history-key="weight:cat_a"]').evaluate('(e)=>e.open')
+    assert root.locator('details[data-history-key="food"]').evaluate('(e)=>e.open')
+    root.get_by_label('Période des courbes').select_option('all')
+    assert root.locator('details[data-history-key="food"]').evaluate('(e)=>e.open')
     # Veterinary entry, history and correction are scoped to one animal.
     root.locator('form').nth(3).evaluate('(f)=>f.parentElement.open=true')
     page.evaluate("""()=>{card.carePet.value='cat_b';card.carePet.dispatchEvent(new Event('change'));card.careDate.value='2024-10-30';card.careCategory.value='vaccination';card.careTitle.value='Example vaccine';card.careNotes.value='Example notes';card.careDue.value='2025-10-30';}""")

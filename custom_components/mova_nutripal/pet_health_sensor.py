@@ -53,8 +53,33 @@ class PetHealthManager:
             new_ids = candidate.pets.keys() - self.model.pets.keys()
             # Save before changing the visible state. A failed/ambiguous write
             # blocks further changes until reload, so it cannot overwrite data.
+            write = None
             try:
-                await self.hass.async_add_executor_job(save_health, self.path, candidate)
+                write = asyncio.ensure_future(
+                    self.hass.async_add_executor_job(save_health, self.path, candidate)
+                )
+                await asyncio.shield(write)
+            except asyncio.CancelledError:
+                # Cancelling the service does not stop an executor thread. Never
+                # permit a later edit to overwrite an uncertain on-disk commit.
+                self.failed = True
+                try:
+                    if write is not None:
+                        while not write.done():
+                            try:
+                                await asyncio.shield(write)
+                            except asyncio.CancelledError:
+                                # Even repeated cancellation must not release the lock
+                                # while the executor may still be writing.
+                                continue
+                        if not write.cancelled():
+                            write.result()
+                except Exception:
+                    _LOGGER.error('Interrupted pet health save also failed')
+                finally:
+                    for entity in tuple(self.entities):
+                        entity.async_write_ha_state()
+                raise
             except Exception:
                 self.failed = True
                 for entity in tuple(self.entities):

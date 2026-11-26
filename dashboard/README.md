@@ -173,3 +173,16 @@ Unit tests render the actual YAML templates with Jinja2 and PyYAML; install
 `python -m pip install -r requirements-dev.txt` before running the suite.
 Actual HA automation execution and mobile delivery require validation on HA.
 No storage format changes were made relative to alpha.4.
+
+
+## Health stabilization (v0.2.6-beta.1)
+
+Upgrade from alpha.5 through HACS, restart Core, copy the matching local card
+and change the existing module resource URL to `/local/mova-pet-health-card.js?v=5`.
+Reload the browser. No dashboard regeneration, re-import or reminder automation
+change is needed. Keep backups of the existing local health file and HA config.
+Existing measurement and food-period dates are fixed when editing a record;
+corrections update its content, not its identity. Open weight, food and care
+history sections remain expanded during normal state refreshes. If a storage
+write is interrupted, health writes are disabled until reload; wait for the
+write to settle and verify the saved record after reload before retrying.

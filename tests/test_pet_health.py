@@ -245,3 +245,61 @@ class PetHealthAdapterTests(unittest.IsolatedAsyncioTestCase):
         rows=self.hub.extra_state_attributes['care_records'];self.assertEqual(len(rows),1)
         self.assertEqual(health.load_health(self.manager.path).export()['care_records'],rows)
         self.assertIn('care_records',self.hub._unrecorded_attributes)
+
+    async def test_cancelled_write_cannot_be_overwritten(self):
+        await self.create()
+        started, release = asyncio.Event(), asyncio.Event()
+        async def delayed_executor(func, *args):
+            started.set()
+            await release.wait()
+            return func(*args)
+        self.hass.async_add_executor_job = delayed_executor
+        task = asyncio.create_task(self.hub.async_record_pet_weights(
+            pet_id='cat_a', measurements=[direct()]))
+        await started.wait()
+        task.cancel()
+        await asyncio.sleep(0)
+        self.assertFalse(self.hub.available)
+        self.assertFalse(task.done())
+        task.cancel()
+        await asyncio.sleep(0)
+        self.assertFalse(task.done())
+        second = asyncio.create_task(self.hub.async_record_pet_weights(
+            pet_id='cat_a', measurements=[cage()]))
+        await asyncio.sleep(0)
+        self.assertFalse(second.done())
+        release.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        with self.assertRaises(RuntimeError):
+            await second
+        self.assertEqual(self.manager.model.summary('cat_a')['measurement_count'], 0)
+        self.assertEqual(health.load_health(self.manager.path).summary('cat_a')['weight_kg'], 4.5)
+        # A new manager (as after reloading HA) sees the durable result.
+        restored = self.adapter.PetHealthManager(self.hass, self.entry, 'example', self.added.extend)
+        await restored.async_load()
+        self.assertFalse(restored.failed)
+        self.assertEqual(restored.model.summary('cat_a')['weight_kg'], 4.5)
+
+    async def test_cancelled_failed_write_keeps_existing_history(self):
+        await self.create()
+        await self.hub.async_record_pet_weights(pet_id='cat_a', measurements=[direct()])
+        before = Path(self.manager.path).read_bytes()
+        started, release = asyncio.Event(), asyncio.Event()
+        async def failed_executor(func, *args):
+            started.set()
+            await release.wait()
+            raise OSError('example write failure')
+        self.hass.async_add_executor_job = failed_executor
+        task = asyncio.create_task(self.hub.async_record_pet_weights(
+            pet_id='cat_a', measurements=[cage()]))
+        await started.wait()
+        task.cancel()
+        await asyncio.sleep(0)
+        release.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertFalse(self.hub.available)
+        self.assertEqual(Path(self.manager.path).read_bytes(), before)
+        with self.assertRaises(RuntimeError):
+            await self.hub.async_record_pet_weights(pet_id='cat_a', measurements=[cage()])

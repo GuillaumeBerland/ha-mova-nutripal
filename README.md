@@ -184,3 +184,14 @@ created. The example and setup instructions are in [dashboard/README.md](dashboa
 The health storage schema and feeder logic are unchanged. Update the existing
 local card resource to `?v=4`. For local unit tests, install the development-only
 requirements with `python -m pip install -r requirements-dev.txt`.
+
+
+### Health stabilization (v0.2.6-beta.1)
+
+This beta consolidates the alpha.5 health features without adding feeding
+controls or changing the health storage format. It protects against interrupted
+writes and accidental date changes during measurement or food-period correction.
+See [dashboard upgrade instructions](dashboard/README.md#health-stabilization-v026-beta1).
+The optional reminders are unchanged. Back up HA before updating and verify
+actual operation in HA, including the midnight feeding boundary. The tests
+are offline and do not establish the accuracy of MOVA's measurements.
