@@ -78,3 +78,46 @@ mark_feeding_day:
       required: true
       selector:
         text:
+save_pet_profile:
+  target:
+    entity:
+      integration: mova_nutripal
+      domain: sensor
+  fields:
+    pet_id:
+      required: true
+      selector:
+        text:
+    name:
+      required: true
+      selector:
+        text:
+    target_kg:
+      selector:
+        number:
+          min: 0.001
+          max: 30
+          step: 0.001
+          unit_of_measurement: kg
+          mode: box
+    baseline_date:
+      selector:
+        date:
+record_pet_weights:
+  target:
+    entity:
+      integration: mova_nutripal
+      domain: sensor
+  fields:
+    pet_id:
+      required: true
+      selector:
+        text:
+    measurements:
+      required: true
+      selector:
+        object: {}
+    replace_existing:
+      default: false
+      selector:
+        boolean:

@@ -163,6 +163,12 @@
       },
       "scheduled_daily_weight": {
         "default": "mdi:scale"
+      },
+      "pet_health": {
+        "default": "mdi:paw"
+      },
+      "pet_weight": {
+        "default": "mdi:scale"
       }
     },
     "binary_sensor": {

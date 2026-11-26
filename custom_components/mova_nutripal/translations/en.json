@@ -200,6 +200,12 @@
       },
       "scheduled_daily_weight": {
         "name": "Estimated daily scheduled weight"
+      },
+      "pet_health": {
+        "name": "Pet health tracking"
+      },
+      "pet_weight": {
+        "name": "Weight"
       }
     },
     "binary_sensor": {
@@ -323,6 +329,46 @@
         "reason": {
           "name": "Reason",
           "description": "1 to 120 characters, e.g. calibration trials."
+        }
+      }
+    },
+    "save_pet_profile": {
+      "name": "Save pet profile",
+      "description": "Create or update a local profile. Target the Pet health tracking sensor.",
+      "fields": {
+        "pet_id": {
+          "name": "Pet ID",
+          "description": "Stable ID: lowercase letters, digits and underscores."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Display name of the pet."
+        },
+        "target_kg": {
+          "name": "Target weight",
+          "description": "Individual target set with the veterinarian (kg). Optional."
+        },
+        "baseline_date": {
+          "name": "Baseline date",
+          "description": "Date of baseline measurement. Optional; otherwise first measurement."
+        }
+      }
+    },
+    "record_pet_weights": {
+      "name": "Record pet weights",
+      "description": "Import dated weights or add a measurement. Target the Pet health tracking sensor.",
+      "fields": {
+        "pet_id": {
+          "name": "Pet ID",
+          "description": "Stable ID of an existing profile."
+        },
+        "measurements": {
+          "name": "Measurements",
+          "description": "List with date, source (home/veterinarian/other) and weight_kg or gross_kg + cage_kg."
+        },
+        "replace_existing": {
+          "name": "Replace existing measurement",
+          "description": "Explicitly allow correction of a measurement on the same date."
         }
       }
     }

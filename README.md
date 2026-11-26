@@ -74,3 +74,23 @@ the 30-day history window; there is not yet an unmark action.
 
 The beta still requires real-world validation of the midnight boundary, diagnostic
 history and camera behavior. Automatic supplementation remains simulation only.
+
+## Local pet health tracking (0.2.6-alpha.1)
+
+This opt-in local feature adds a **Pet health tracking** sensor (profile count) and an independent weight sensor for every registered pet. It does not query MOVA, identify pets using the camera, estimate individual food intake, change food portions or provide veterinary advice. A feeder entry must be set up successfully before the health entities are loaded; once loaded they do not depend on the feeder's current cloud availability. No pets or weights are supplied by default.
+
+In Developer Tools > Actions, select exactly one **Pet health tracking** sensor for both actions (not a feeder consumption sensor or individual pet weight sensor):
+
+- `mova_nutripal.save_pet_profile`: `pet_id` (stable lowercase letters, digits and underscores, 1–32 characters), `name`, optional `target_kg`, optional ISO `baseline_date`. Target and baseline are user-defined; set the target with your veterinarian. The baseline defaults to the earliest recorded weighing when no date is explicitly set. Reusing an ID updates the profile and preserves its measurements; omitted optional settings remain unchanged. The pet name is also in sensor attributes; entity/device registry display names can be customized in HA.
+- `mova_nutripal.record_pet_weights`: `pet_id`, `measurements` (a list of objects), optional `replace_existing: false`. Each object contains `date`, `source` (`home`, `veterinarian`, or `other`) and exactly one of `weight_kg` (direct) or `gross_kg` plus `cage_kg` (net = gross minus cage). Use decimal kg to at most three places. Dates use the configured Home Assistant timezone for future-date validation. Import multiple historical rows at once; they are sorted by measurement date, not upload date. Identical imports are idempotent; a different measurement on the same date is rejected unless replacement is explicitly allowed. An invalid row rejects the whole batch.
+
+Example action data (fictional):
+
+```yaml
+pet_id: cat_a
+measurements:
+  - {date: '2025-01-01', source: veterinarian, weight_kg: 4.5}
+  - {date: '2025-02-01', source: home, gross_kg: 5.35, cage_kg: 1.0}
+```
+
+Weight sensors expose the latest dated net weight in kg, target, baseline, signed change in grams/percent, difference to target, and the dated `measurements` attribute with weights in integer grams. Imported dates are not backdated in HA Recorder; the future Health dashboard will use the stored dates. The full measurements attribute is excluded from Recorder to avoid growing its database with repeated copies. The local versioned JSON file is `.storage/mova_nutripal.<entry_id>.pet_health.json`, independent of feeding/calibration data. Back it up; do not publish it or personal import files. Invalid or failed storage disables health writes rather than silently overwriting history. Data is retained on entry removal; no profile deletion or target clearing UI/action yet. Limit: 20 profiles, 1000 dated weights per profile, one measurement per date; limits reject new data rather than delete older measurements. The native Health dashboard, medical event tracking and food profiles are planned for subsequent versions. This feature is experimental until tested in HA 2026.11.2.

@@ -200,6 +200,12 @@
       },
       "scheduled_daily_weight": {
         "name": "Poids journalier programmé estimé"
+      },
+      "pet_health": {
+        "name": "Suivi santé des animaux"
+      },
+      "pet_weight": {
+        "name": "Poids"
       }
     },
     "binary_sensor": {
@@ -323,6 +329,46 @@
         "reason": {
           "name": "Motif",
           "description": "1 à 120 caractères. Par exemple : essais de calibration."
+        }
+      }
+    },
+    "save_pet_profile": {
+      "name": "Enregistrer le profil animal",
+      "description": "Créer ou modifier un profil local. Cibler le capteur Suivi santé des animaux.",
+      "fields": {
+        "pet_id": {
+          "name": "Identifiant animal",
+          "description": "Identifiant stable : lettres minuscules, chiffres et underscores."
+        },
+        "name": {
+          "name": "Nom",
+          "description": "Nom affiché de l’animal."
+        },
+        "target_kg": {
+          "name": "Poids cible",
+          "description": "Objectif individuel défini avec le vétérinaire (kg). Facultatif."
+        },
+        "baseline_date": {
+          "name": "Date de référence",
+          "description": "Date de la pesée de référence. Facultative ; sinon première pesée."
+        }
+      }
+    },
+    "record_pet_weights": {
+      "name": "Enregistrer les pesées",
+      "description": "Importer des pesées datées ou ajouter une nouvelle mesure. Cibler le capteur Suivi santé des animaux.",
+      "fields": {
+        "pet_id": {
+          "name": "Identifiant animal",
+          "description": "Identifiant stable du profil existant."
+        },
+        "measurements": {
+          "name": "Pesées",
+          "description": "Liste avec date, source (home/veterinarian/other) et weight_kg ou gross_kg + cage_kg."
+        },
+        "replace_existing": {
+          "name": "Remplacer une pesée existante",
+          "description": "Autoriser explicitement la correction d’une pesée à la même date."
         }
       }
     }

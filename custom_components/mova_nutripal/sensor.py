@@ -6,6 +6,7 @@ import voluptuous as vol
 from math import isfinite
 from .const import DOMAIN
 from .entity import NutriPalEntity
+from .pet_health_sensor import async_setup_pet_health
 
 GRAMS = ("intake_today", "intake_yesterday", "bowl_weight", "configured_weight", "calibration_weight", "estimated_distributed", "forecast", "budget", "target", "measured_weight", "compensated_weight", "daily_reconstructed", "daily_portion_weight", "daily_difference", "daily_corrected_forecast", "physical_reference", "scheduled_daily_weight")
 COUNTS = ("meals_today", "meals_yesterday", "portions_today", "portions_yesterday", "supplement_remaining", "remaining_portions", "suggested_portions", "calibration_samples", "compensated_samples", "daily_history_count", "scheduled_daily_portions")
@@ -35,6 +36,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             vol.Required('trials'): list,
             vol.Required('confirmed'): cv.boolean,
         }, 'async_record_physical_calibration')
+    await async_setup_pet_health(hass, entry, coordinator.did, async_add_entities)
 
 
 def _whole_number(value):

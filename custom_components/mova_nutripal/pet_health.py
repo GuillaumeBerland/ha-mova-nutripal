@@ -1,0 +1,183 @@
+"""Local pet profiles and dated weights, isolated from feeding and cloud data."""
+from copy import deepcopy
+from datetime import date
+from decimal import Decimal
+from math import isfinite
+from pathlib import Path
+import json
+import re
+
+from .state_store import save_state
+
+MAX_PETS = 20
+MAX_WEIGHTS = 1000
+_ID = re.compile(r'[a-z0-9][a-z0-9_]{0,31}')
+
+
+def _pet_id(value):
+    if not isinstance(value, str) or not _ID.fullmatch(value):
+        raise ValueError('Invalid pet ID (use 1-32 lowercase letters, digits or underscores)')
+    return value
+
+
+def _date(value, today=None):
+    if type(value) is date:
+        value = value.isoformat()
+    if not isinstance(value, str):
+        raise ValueError('Expected an ISO date')
+    day = date.fromisoformat(value)
+    if day.isoformat() != value or (today is not None and day > today):
+        raise ValueError('Invalid or future date')
+    return value
+
+
+def _grams(value, minimum=1, maximum=30000):
+    if type(value) not in (int, float) or not isfinite(value):
+        raise ValueError('Expected finite weight in kg')
+    grams = Decimal(str(value)) * 1000
+    if grams != grams.to_integral_value() or not minimum <= grams <= maximum:
+        raise ValueError('Invalid weight (maximum three decimal places in kg)')
+    return int(grams)
+
+
+def _integer_grams(value, minimum=1, maximum=30000):
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise ValueError('Invalid stored weight')
+    return value
+
+
+def _name(value):
+    if not isinstance(value, str) or not 1 <= len(value.strip()) <= 64 or any(ord(c) < 32 for c in value):
+        raise ValueError('Invalid pet name')
+    return value.strip()
+
+
+def _measurement(row, today):
+    if not isinstance(row, dict) or not {'date', 'source'} <= row.keys():
+        raise ValueError('Each measurement requires a date and source')
+    day = _date(row['date'], today)
+    source = row['source']
+    if source not in ('home', 'veterinarian', 'other'):
+        raise ValueError('Invalid measurement source')
+    keys = set(row) - {'date', 'source'}
+    if keys == {'weight_kg'}:
+        return dict(date=day, source=source, method='direct', grams=_grams(row['weight_kg']))
+    if keys == {'gross_kg', 'cage_kg'}:
+        gross = _grams(row['gross_kg'], maximum=60000)
+        cage = _grams(row['cage_kg'])
+        net = _integer_grams(gross - cage)
+        return dict(date=day, source=source, method='cage', grams=net, gross_grams=gross, cage_grams=cage)
+    raise ValueError('Provide either weight_kg or both gross_kg and cage_kg')
+
+
+def _validate_stored_row(row):
+    if not isinstance(row, dict):
+        raise ValueError('Invalid stored measurement')
+    day = _date(row['date'])
+    source = row['source']
+    if source not in ('home', 'veterinarian', 'other'):
+        raise ValueError('Invalid stored source')
+    net = _integer_grams(row['grams'])
+    if row['method'] == 'direct' and set(row) == {'date', 'source', 'method', 'grams'}:
+        return dict(date=day, source=source, method='direct', grams=net)
+    if row['method'] == 'cage' and set(row) == {'date', 'source', 'method', 'grams', 'gross_grams', 'cage_grams'}:
+        gross = _integer_grams(row['gross_grams'], maximum=60000)
+        cage = _integer_grams(row['cage_grams'])
+        if gross - cage == net:
+            return dict(date=day, source=source, method='cage', grams=net, gross_grams=gross, cage_grams=cage)
+    raise ValueError('Invalid stored measurement method or net weight')
+
+
+class PetHealth:
+    """Pure model: callers save a candidate before publishing it to entities."""
+    def __init__(self, state=None):
+        self.pets = {}
+        if state is None:
+            return
+        if not isinstance(state, dict) or set(state) != {'pets'} or not isinstance(state['pets'], dict) or len(state['pets']) > MAX_PETS:
+            raise ValueError('Invalid pet health state')
+        for key, profile in state['pets'].items():
+            _pet_id(key)
+            if not isinstance(profile, dict) or set(profile) != {'name', 'target_grams', 'baseline_date', 'measurements'}:
+                raise ValueError('Invalid pet profile')
+            target = profile['target_grams']
+            baseline = profile['baseline_date']
+            rows = profile['measurements']
+            if not isinstance(rows, list) or len(rows) > MAX_WEIGHTS:
+                raise ValueError('Invalid measurement history')
+            rows = [_validate_stored_row(row) for row in rows]
+            if len({row['date'] for row in rows}) != len(rows):
+                raise ValueError('Duplicate stored measurement date')
+            self.pets[key] = dict(name=_name(profile['name']),
+                target_grams=None if target is None else _integer_grams(target),
+                baseline_date=None if baseline is None else _date(baseline),
+                measurements=sorted(rows, key=lambda row: row['date']))
+
+    def export(self):
+        return {'pets': deepcopy(self.pets)}
+
+    def save_profile(self, *, pet_id, name, today, target_kg=None, baseline_date=None):
+        key = _pet_id(pet_id)
+        old = self.pets.get(key)
+        if old is None and len(self.pets) >= MAX_PETS:
+            raise ValueError('Pet profile limit reached')
+        # Omitted optional fields preserve the existing values on update.
+        target = (old['target_grams'] if old else None) if target_kg is None else _grams(target_kg)
+        baseline = (old['baseline_date'] if old else None) if baseline_date is None else _date(baseline_date, today)
+        profile = dict(name=_name(name), target_grams=target, baseline_date=baseline,
+                       measurements=deepcopy(old['measurements']) if old else [])
+        self.pets[key] = profile
+
+    def record_weights(self, *, pet_id, measurements, today, replace_existing=False):
+        key = _pet_id(pet_id)
+        if key not in self.pets:
+            raise ValueError('Unknown pet ID')
+        if type(replace_existing) is not bool or not isinstance(measurements, list) or not 1 <= len(measurements) <= MAX_WEIGHTS:
+            raise ValueError('Invalid measurement batch')
+        incoming = [_measurement(row, today) for row in measurements]
+        if len({row['date'] for row in incoming}) != len(incoming):
+            raise ValueError('Duplicate date within measurement batch')
+        rows = {row['date']: row for row in self.pets[key]['measurements']}
+        for row in incoming:
+            old = rows.get(row['date'])
+            if old is not None and old != row and not replace_existing:
+                raise ValueError('Measurement already exists on this date; explicit replacement required')
+            rows[row['date']] = row
+        if len(rows) > MAX_WEIGHTS:
+            raise ValueError('Measurement limit reached; no existing measurement deleted')
+        self.pets[key]['measurements'] = sorted(rows.values(), key=lambda row: row['date'])
+
+    def summary(self, pet_id):
+        p = self.pets[pet_id]
+        rows = p['measurements']
+        latest = rows[-1] if rows else None
+        baseline = (next((r for r in rows if r['date'] == p['baseline_date']), None)
+                    if p['baseline_date'] else (rows[0] if rows else None))
+        if latest and baseline and latest['date'] < baseline['date']:
+            baseline = None
+        target = p['target_grams']
+        delta = latest['grams'] - baseline['grams'] if latest and baseline else None
+        return dict(pet_id=pet_id, name=p['name'], target_kg=target/1000 if target is not None else None,
+            baseline_date=baseline['date'] if baseline else p['baseline_date'],
+            baseline_kg=baseline['grams']/1000 if baseline else None,
+            latest_date=latest['date'] if latest else None,
+            weight_kg=latest['grams']/1000 if latest else None,
+            latest_source=latest['source'] if latest else None,
+            change_grams=delta, change_percent=round(100*delta/baseline['grams'], 2) if delta is not None else None,
+            difference_to_target_grams=latest['grams']-target if latest and target is not None else None,
+            measurement_count=len(rows))
+
+
+def load_health(path):
+    try:
+        with Path(path).open(encoding='utf-8') as f:
+            raw = json.load(f)
+    except FileNotFoundError:
+        return PetHealth()
+    if not isinstance(raw, dict) or type(raw.get('version')) is not int or raw['version'] != 1:
+        raise ValueError('Unsupported pet health storage version')
+    return PetHealth(raw['state'])
+
+
+def save_health(path, health):
+    save_state(path, health.export())
