@@ -1,0 +1,64 @@
+# Optional example: paste in the YAML editor of a NEW Home Assistant automation.
+# Replace health_entity with the actual "Pet health tracking" sensor.
+# No automatic treatment or feeding action; all care dates are user declarations.
+alias: MOVA - Rappels santé des animaux
+description: Rappels facultatifs des pesées et des échéances de soins déclarées.
+mode: single
+triggers:
+  - trigger: time
+    at: '09:00:00'
+variables:
+  health_entity: sensor.example_pet_health
+  # 0 disables weighing reminders. Care lead time 0 means due/overdue only.
+  weighing_interval_days: 7
+  care_lead_days: 7
+conditions:
+  - condition: template
+    value_template: >-
+      {{ states(health_entity) not in ['unknown', 'unavailable']
+         and state_attr(health_entity, 'profiles') is not none
+         and state_attr(health_entity, 'care_records') is not none }}
+actions:
+  - variables:
+      reminder_message: >-
+        {%- set today = now().date() -%}
+        {%- set profiles = state_attr(health_entity, 'profiles') or [] -%}
+        {%- set records = state_attr(health_entity, 'care_records') or [] -%}
+        {%- set ns = namespace(lines=[]) -%}
+        {%- for p in profiles if weighing_interval_days | int(0) > 0 -%}
+          {%- set last = as_datetime(p.latest_date, none) if p.latest_date else none -%}
+          {%- if last is none -%}
+            {%- set ns.lines = ns.lines + [p.name ~ ' : aucune pesée enregistrée.'] -%}
+          {%- elif (today - last.date()).days >= weighing_interval_days | int(0) -%}
+            {%- set ns.lines = ns.lines + [p.name ~ ' : dernière pesée il y a ' ~ (today - last.date()).days ~ ' j.'] -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- for r in records | selectattr('due_date') | rejectattr('completed') | sort(attribute='due_date') -%}
+          {%- set due = as_datetime(r.due_date, none) -%}
+          {%- set pets = profiles | selectattr('pet_id', 'equalto', r.pet_id) | list -%}
+          {%- if due is not none and pets | length > 0 and (due.date() - today).days <= care_lead_days | int(0) -%}
+            {%- set delta = (due.date() - today).days -%}
+            {%- set label = 'en retard de ' ~ (-delta) ~ ' j' if delta < 0 else 'aujourd’hui' if delta == 0 else 'dans ' ~ delta ~ ' j' -%}
+            {%- set ns.lines = ns.lines + [pets[0].name ~ ' : ' ~ r.title ~ ' (' ~ due.strftime('%d/%m/%Y') ~ ', ' ~ label ~ ').'] -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {{- ns.lines | join('\n\n') -}}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: '{{ reminder_message | trim != "" }}'
+        sequence:
+          - action: persistent_notification.create
+            data:
+              title: Rappels santé des animaux
+              message: '{{ reminder_message }}'
+              notification_id: '{{ health_entity ~ "_health_reminders" }}'
+          # Optional phone notification: add another action here, e.g.
+          # - action: notify.mobile_app_your_phone
+          #   data:
+          #     title: Rappels santé des animaux
+          #     message: '{{ reminder_message }}'
+    default:
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: '{{ health_entity ~ "_health_reminders" }}'

@@ -132,3 +132,44 @@ Back up HA before upgrading; downgrading after the new storage is written
 requires restoring the pre-upgrade health file (older releases reject unknown
 storage fields). The log is local but is visible to HA users with access to the
 health sensor. History attributes are excluded from normal Recorder history.
+
+## Health readability and optional reminders (v0.2.6-alpha.5)
+
+The interactive card uses a shared time range and weight scale for all pets,
+separate colours, real time ticks, localized dates, the age of the latest
+measurement, and a compact food mixture bar. The common period can be set to
+baseline, 3/6/12 months or all history. A pet with no measurements in that
+period is shown as such, rather than silently displaying older measurements.
+The declared food start date is not automatically inferred or corrected.
+
+Replace the local card file and update the existing module resource URL to
+`/local/mova-pet-health-card.js?v=4` after upgrading. No dashboard regeneration
+or data re-import is required for an existing interactive Health view.
+
+### Optional daily health notification
+
+`dashboard/health_reminders_automation.yaml` is an example native Home Assistant
+automation, in French. Create a new automation, open its YAML editor, and paste
+the file. Replace `sensor.example_pet_health` with the actual global Pet health
+tracking sensor of your feeder (not an individual weight sensor). Adjust the
+09:00 local time, weighing interval (7 days is an example; 0 disables weight
+reminders) and care lead time (7 days is an example; 0 means due/overdue only).
+It evaluates dates against HA's local date and uses only the selected health
+sensor. A completed follow-up, a record with no due date, or an unavailable
+sensor cannot generate a new reminder. It sends one grouped persistent HA
+notification per scheduled run while reminders remain outstanding; its stable
+ID replaces the previous notification and it is dismissed on the next
+successful run with nothing due. No schedule is invented from a care category.
+
+For optional Companion App push notifications, add the commented notify action
+in the nonempty-message sequence and select your actual `notify.mobile_app_*`
+action. This sends the same health message to the selected destination, daily
+while outstanding. Configure it only if you want to share that information with
+the chosen notification service. Nothing is enabled automatically; saving the
+automation opts in. The daily time trigger does not catch up missed runs when
+HA is offline. The example is not a medication scheduler.
+
+Unit tests render the actual YAML templates with Jinja2 and PyYAML; install
+`python -m pip install -r requirements-dev.txt` before running the suite.
+Actual HA automation execution and mobile delivery require validation on HA.
+No storage format changes were made relative to alpha.4.

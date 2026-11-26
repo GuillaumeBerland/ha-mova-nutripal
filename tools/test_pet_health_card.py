@@ -35,6 +35,23 @@ def run(browser):
     assert '9,999' not in root.locator('ha-card').inner_text()
     assert root.locator('.pet').first.locator('.weight').inner_text() == '4,200 kg'
     assert '60,0 %' in root.locator('ha-card').inner_text()
+    # Common scale and date bounds, distinct chart colours, translated dates.
+    axes = root.locator('.pet').evaluate_all("cards=>cards.map(c=>[...c.querySelectorAll('svg text[text-anchor=end]')].map(x=>x.textContent))")
+    assert axes[0] == axes[1], axes
+    colours = root.locator('svg polyline').evaluate_all("lines=>lines.map(x=>x.getAttribute('stroke'))")
+    assert len(set(colours)) == 2, colours
+    assert '31/10/2024' in root.locator('.pet').first.inner_text()
+    page.evaluate("()=>{card.today=()=> '2024-11-15';card.refresh();}")
+    root.get_by_label('Période des courbes').select_option('3')
+    assert root.locator('svg circle').count() == 2
+    assert 'Il y a 15 j' in root.locator('.pet').first.inner_text()
+    page.evaluate("()=>{hass.states['sensor.hub']={...hass.states['sensor.hub']};card.hass=hass;}")
+    assert root.get_by_label('Période des courbes').input_value() == '3'
+    root.get_by_label('Période des courbes').select_option('all')
+    assert root.locator('svg circle').count() == 4
+    root.get_by_label('Période des courbes').select_option('baseline')
+    # Restore dynamic clock for other form tests.
+    page.evaluate("()=>{delete card.today;card.hass=hass;}")
     # Actual DOM events and form submission; exact target and source fields.
     root.locator('form').first.evaluate('(f)=>f.parentElement.open=true')
     page.evaluate('''()=>{card.day.value='2024-10-30';card.gross.value='5.25';card.cage.value='1.050';card.updateNet();}''')
@@ -75,6 +92,10 @@ def run(browser):
     assert page.evaluate('calls[3]') == ['mova_nutripal','record_food_period',{'period':{'start_date':'2024-10-31','name':'Example blend','components':[{'name':'A','percent':70},{'name':'B','percent':30}],'ration_g':100,'portion_g':6.8},'replace_existing':False},{'entity_id':'sensor.hub'}]
     page.evaluate("""()=>{const r=calls[3][2].period;hass.states['sensor.hub']={state:'2',attributes:{health_scope:'entry-a',profiles:[a,b],food:{current:r,history:[r],used_for_feeding:false}}};card.hass=hass;}""")
     assert 'Example blend' in root.locator('ha-card').inner_text()
+    assert root.locator('.mixture > div').count() == 2
+    assert root.locator('.mixture > div').evaluate_all("els=>els.map(e=>e.style.width)") == ['70%', '30%']
+    assert 'A · 70 %' in root.locator('.mix-legend').inner_text()
+    assert 'Début déclaré : 31/10/2024' in root.locator('ha-card').inner_text()
     assert 'Repères verticaux' in root.locator('ha-card').inner_text()
     page.evaluate("""()=>{card.foodSelect.value='2024-10-31';card.loadFood();}""")
     assert page.evaluate('card.foodFields.length') == 2

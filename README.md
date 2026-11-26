@@ -172,3 +172,15 @@ data:
 A correction requires the existing `record_id` and `replace_existing: true`.
 Set `completed: true` with a due date to mark a recorded follow-up done.
 Records never modify feeding settings, medications or veterinary schedules.
+
+### Health dashboard improvements and optional reminders (v0.2.6-alpha.5)
+
+The interactive Health card uses a common chart scale and time range, localized
+measurement dates, distinct pet colours and a compact food mixture display.
+An optional native daily automation can notify about stale weighing dates and
+user-declared care follow-ups. Configure the interval, lead time and delivery
+destination yourself; no notifications or care schedules are automatically
+created. The example and setup instructions are in [dashboard/README.md](dashboard/README.md).
+The health storage schema and feeder logic are unchanged. Update the existing
+local card resource to `?v=4`. For local unit tests, install the development-only
+requirements with `python -m pip install -r requirements-dev.txt`.

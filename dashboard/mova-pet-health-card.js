@@ -1,6 +1,8 @@
 /* Local Lovelace card. No remote assets, no feeding commands, no localStorage. */
 (() => {
   'use strict';
+  const COLORS = ['#527fba','#b66e89','#309879','#b08038','#8565b6','#588e9c'];
+  const DAY = 86400000;
   const SVG = 'http://www.w3.org/2000/svg';
   const num = x => typeof x === 'number' && Number.isFinite(x);
   const dateOK = x => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) && Number.isFinite(Date.parse(x));
@@ -25,6 +27,9 @@
     }
     tr(fr,en) { return this.fr ? fr : en; }
     fmt(x, digits=3) { return num(x) ? x.toLocaleString(this.fr?'fr-FR':'en-GB',{minimumFractionDigits:digits,maximumFractionDigits:digits}) : '—'; }
+    pretty(x) { return num(x) ? x.toLocaleString(this.fr?'fr-FR':'en-GB',{maximumFractionDigits:2}) : '—'; }
+    displayDate(x) { return dateOK(x) ? (this.fr ? x.split('-').reverse().join('/') : x) : '—'; }
+    daysAgo(x) { return dateOK(x)&&dateOK(this.today()) ? Math.round((Date.parse(this.today())-Date.parse(x))/DAY) : null; }
     getCardSize() { return 9; }
     getGridOptions() { return {columns:12, rows:'auto', min_columns:6}; }
     set hass(hass) {
@@ -38,7 +43,7 @@
     }
     build() {
       this.shadowRoot.replaceChildren();
-      const style = txt('style',`:host{display:block;max-width:1100px;margin:0 auto;width:100%} ha-card{padding:20px;box-sizing:border-box;color:var(--primary-text-color);font-family:inherit} h2,h3,p{margin:0 0 12px} h2{font-size:21px} h3{font-size:17px} .muted{color:var(--secondary-text-color);font-size:13px} .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px} .pet{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:14px;min-width:0} .food-row{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px;margin-top:12px;min-width:0;display:grid;gap:8px}.weight{font-size:29px;font-weight:650;font-variant-numeric:tabular-nums} .line{display:flex;justify-content:space-between;gap:10px;margin:7px 0} .track{height:8px;background:var(--divider-color,#ddd);border-radius:8px;overflow:hidden;margin:9px 0} .fill{height:100%;background:var(--primary-color,#039be5)} svg{width:100%;height:auto;display:block;margin:10px 0} details{margin:14px 0 0;border-top:1px solid var(--divider-color,#ddd);padding-top:12px} summary{cursor:pointer;font-weight:600} form{display:grid;gap:10px;margin-top:12px} label{display:grid;gap:4px;font-size:14px} input,select,button{box-sizing:border-box;font:inherit;color:inherit;background:var(--card-background-color,var(--primary-background-color));border:1px solid var(--divider-color,#888);border-radius:7px;padding:9px;min-width:0} button{cursor:pointer;background:var(--primary-color,#039be5);color:var(--text-primary-color,#fff);font-weight:600} button:disabled{opacity:.5;cursor:default} .check{display:flex;align-items:center;gap:8px} .check input{width:auto} .error{color:var(--error-color,#c33);white-space:pre-wrap} .status{min-height:1em;font-size:13px;white-space:pre-wrap} .scroll{overflow:auto;max-height:260px} table{border-collapse:collapse;width:100%;font-size:13px} td,th{padding:7px;text-align:left;border-bottom:1px solid var(--divider-color,#ddd)} .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:10px} [hidden]{display:none!important}`);
+      const style = txt('style',`:host{display:block;max-width:1100px;margin:0 auto;width:100%} ha-card{padding:20px;box-sizing:border-box;color:var(--primary-text-color);font-family:inherit} h2,h3,p{margin:0 0 12px} h2{font-size:21px} h3{font-size:17px} .muted{color:var(--secondary-text-color);font-size:13px} .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px} .pet{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:14px;min-width:0} .food-row{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px;margin-top:12px;min-width:0;display:grid;gap:8px}.food-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:8px 22px}.food-summary .line{margin:3px 0}.mixture{display:flex;height:12px;border-radius:8px;overflow:hidden}.mix-legend{display:flex;flex-wrap:wrap;gap:6px 16px}.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}.chart-controls{display:flex;align-items:center;gap:8px;margin:0 0 12px;flex-wrap:wrap}.weight{font-size:29px;font-weight:650;font-variant-numeric:tabular-nums} .line{display:flex;justify-content:space-between;gap:10px;margin:7px 0} .track{height:8px;background:var(--divider-color,#ddd);border-radius:8px;overflow:hidden;margin:9px 0} .fill{height:100%;background:var(--primary-color,#039be5)} svg{width:100%;height:auto;display:block;margin:10px 0} details{margin:14px 0 0;border-top:1px solid var(--divider-color,#ddd);padding-top:12px} summary{cursor:pointer;font-weight:600} form{display:grid;gap:10px;margin-top:12px} label{display:grid;gap:4px;font-size:14px} input,select,button{box-sizing:border-box;font:inherit;color:inherit;background:var(--card-background-color,var(--primary-background-color));border:1px solid var(--divider-color,#888);border-radius:7px;padding:9px;min-width:0} button{cursor:pointer;background:var(--primary-color,#039be5);color:var(--text-primary-color,#fff);font-weight:600} button:disabled{opacity:.5;cursor:default} .check{display:flex;align-items:center;gap:8px} .check input{width:auto} .error{color:var(--error-color,#c33);white-space:pre-wrap} .status{min-height:1em;font-size:13px;white-space:pre-wrap} .scroll{overflow:auto;max-height:260px} table{border-collapse:collapse;width:100%;font-size:13px} td,th{padding:7px;text-align:left;border-bottom:1px solid var(--divider-color,#ddd)} .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:10px} [hidden]{display:none!important}`);
       const card = txt('ha-card'); card.append(txt('h2',this.tr('Santé · suivi du poids','Health · weight tracking')));
       this.summary = txt('div',this.tr('Chargement…','Loading…')); card.append(this.summary);
       this.forms = txt('div'); this.forms.hidden=true; card.append(this.forms); this.buildForms();
@@ -120,16 +125,19 @@
     }
     foodCard(food){
       const a=txt('section',null,'food-row');a.append(txt('h3',this.tr('Alimentation · profil partagé','Food · shared profile')));
-      const c=food?.current;const line=(label,value)=>{const l=txt('div',null,'line');l.append(txt('span',label,'muted'),txt('strong',value));a.append(l);};
+      const c=food?.current;const line=(label,value)=>{const l=txt('div',null,'line');l.append(txt('span',label,'muted'),txt('strong',value));metrics.append(l);};
       if(!c){a.append(txt('p',this.tr('Aucune période alimentaire enregistrée.','No recorded food period.')));return a;}
-      a.append(txt('div',c.name,'weight'),txt('p',this.tr('Depuis ','Since ')+c.start_date,'muted'));
-      for(const r of c.components||[])line(r.name,this.fmt(r.percent,2)+' %');
-      line(this.tr('Ration cible déclarée','Declared target ration'),num(c.ration_g)?this.fmt(c.ration_g,2)+' g/j':'—');
-      line(this.tr('Référence déclarée','Declared portion reference'),num(c.portion_g)?this.fmt(c.portion_g,2)+' g':'—');
-      line(this.tr('Densité énergétique du mélange','Mixture energy density'),num(c.kcal_per_100g)?this.fmt(c.kcal_per_100g,2)+' kcal/100 g':'—');
-      line(this.tr('Énergie de la ration cible (est.)','Target ration energy (est.)'),num(c.ration_kcal)?this.fmt(c.ration_kcal,2)+' kcal/j':'—');
+      a.append(txt('div',c.name,'weight'),txt('p',this.tr('Début déclaré : ','Declared start: ')+this.displayDate(c.start_date),'muted'));
+      const bar=txt('div',null,'mixture'),legend=txt('div',null,'mix-legend');
+      for(const [i,r] of (c.components||[]).entries()){const color=COLORS[i%COLORS.length],segment=txt('div'),item=txt('span'),swatch=txt('span',null,'swatch');segment.style.width=r.percent+'%';segment.style.background=color;segment.title=r.name+' · '+this.pretty(r.percent)+' %';swatch.style.background=color;item.append(swatch,document.createTextNode(segment.title));bar.append(segment);legend.append(item);}
+      a.append(bar,legend);const metrics=txt('div',null,'food-summary');a.append(metrics);
+
+      line(this.tr('Ration cible déclarée','Declared target ration'),num(c.ration_g)?this.pretty(c.ration_g)+' g/j':'—');
+      line(this.tr('Référence déclarée','Declared portion reference'),num(c.portion_g)?this.pretty(c.portion_g)+' g':'—');
+      line(this.tr('Densité énergétique du mélange','Mixture energy density'),num(c.kcal_per_100g)?this.pretty(c.kcal_per_100g)+' kcal/100 g':'—');
+      line(this.tr('Énergie de la ration cible (est.)','Target ration energy (est.)'),num(c.ration_kcal)?this.pretty(c.ration_kcal)+' kcal/j':'—');
       const detail=txt('details');detail.append(txt('summary',this.tr('Historique alimentaire','Food history')+` (${this.foodHistory.length})`));const wrap=txt('div',null,'scroll');
-      for(const r of this.foodHistory.slice().reverse()){const b=txt('div',null,'food-row');b.append(txt('strong',r.start_date+' · '+r.name),txt('p',(r.components||[]).map(x=>`${x.name} : ${this.fmt(x.percent,2)} %`).join(' · '),'muted'));if(num(r.portion_g))b.append(txt('p',this.tr('Référence déclarée : ','Declared reference: ')+this.fmt(r.portion_g,2)+' g','muted'));wrap.append(b);}detail.append(wrap);a.append(detail);return a;
+      for(const r of this.foodHistory.slice().reverse()){const b=txt('div',null,'food-row');b.append(txt('strong',this.displayDate(r.start_date)+' · '+r.name),txt('p',(r.components||[]).map(x=>`${x.name} : ${this.pretty(x.percent)} %`).join(' · '),'muted'));if(num(r.portion_g))b.append(txt('p',this.tr('Référence déclarée : ','Declared reference: ')+this.pretty(r.portion_g)+' g','muted'));wrap.append(b);}detail.append(wrap);a.append(detail);return a;
     }
     careCategories(){return [['consultation',this.tr('Consultation','Consultation')],['vaccination',this.tr('Vaccin','Vaccination')],['deworming',this.tr('Vermifuge','Deworming')],['parasite_control',this.tr('Antiparasitaire','Parasite control')],['treatment',this.tr('Traitement','Treatment')],['observation',this.tr('Observation','Observation')],['other',this.tr('Autre','Other')]];}
     buildCareForm(){
@@ -148,7 +156,7 @@
       this.carePet.addEventListener('change',()=>{this.refreshCareOld(false);this.loadCare();});this.careOld.addEventListener('change',()=>this.loadCare());f.addEventListener('submit',e=>{e.preventDefault();this.saveCare();});this.forms.append(d);
       this.careDate.value=this.today();
     }
-    refreshCareOld(preserve=true){const prev=preserve?this.careOld.value:'';this.careOld.replaceChildren();this.option(this.careOld,'',this.tr('Nouvel événement','New record'));for(const r of (this.careHistory||[]).filter(r=>r.pet_id===this.carePet.value).slice().reverse())this.option(this.careOld,r.record_id,r.date+' · '+r.title);if([...this.careOld.options].some(o=>o.value===prev))this.careOld.value=prev;}
+    refreshCareOld(preserve=true){const prev=preserve?this.careOld.value:'';this.careOld.replaceChildren();this.option(this.careOld,'',this.tr('Nouvel événement','New record'));for(const r of (this.careHistory||[]).filter(r=>r.pet_id===this.carePet.value).slice().reverse())this.option(this.careOld,r.record_id,this.displayDate(r.date)+' · '+r.title);if([...this.careOld.options].some(o=>o.value===prev))this.careOld.value=prev;}
     loadCare(){const r=(this.careHistory||[]).find(r=>r.record_id===this.careOld.value&&r.pet_id===this.carePet.value);this.careDate.value=r?.date||this.today();this.careCategory.value=r?.category||'consultation';this.careTitle.value=r?.title||'';this.careNotes.value=r?.notes||'';this.careDue.value=r?.due_date||'';this.careDone.checked=!!r?.completed;this.careReplace.checked=false;}
     async saveCare(){
       if(this.busy)return;
@@ -164,9 +172,9 @@
       const names=new Map(this.profiles.map(p=>[p.pet_id,p.name]));const categories=new Map(this.careCategories());const today=this.today();
       const records=this.careHistory;const due=records.filter(r=>r.due_date&&!r.completed).slice().sort((x,y)=>x.due_date.localeCompare(y.due_date));
       a.append(txt('strong',this.tr('Échéances déclarées','Recorded follow-ups')));if(!due.length)a.append(txt('p',this.tr('Aucune échéance ouverte.','No open follow-ups.'),'muted'));
-      const pending=txt('div',null,'scroll');for(const r of due){const b=txt('div',null,'food-row');b.append(txt('strong',names.get(r.pet_id)+' · '+r.title),txt('p',r.due_date+' · '+(r.due_date<today?this.tr('En retard','Overdue'):r.due_date===today?this.tr('Aujourd’hui','Today'):this.tr('À venir','Upcoming')),r.due_date<today?'error':'muted'));pending.append(b);}a.append(pending);
+      const pending=txt('div',null,'scroll');for(const r of due){const b=txt('div',null,'food-row');b.append(txt('strong',names.get(r.pet_id)+' · '+r.title),txt('p',this.displayDate(r.due_date)+' · '+(r.due_date<today?this.tr('En retard','Overdue'):r.due_date===today?this.tr('Aujourd’hui','Today'):this.tr('À venir','Upcoming')),r.due_date<today?'error':'muted'));pending.append(b);}a.append(pending);
       const detail=txt('details');detail.append(txt('summary',this.tr('Historique vétérinaire et observations','Veterinary and observation history')+` (${records.length})`));const wrap=txt('div',null,'scroll');
-      for(const r of records.slice().reverse()){const b=txt('div',null,'food-row');b.append(txt('strong',r.date+' · '+names.get(r.pet_id)+' · '+r.title),txt('p',categories.get(r.category)||r.category,'muted'));if(r.notes)b.append(txt('p',r.notes));if(r.due_date)b.append(txt('p',r.due_date+' · '+(r.completed?this.tr('Suivi effectué','Follow-up completed'):this.tr('Suivi ouvert','Open follow-up')),'muted'));wrap.append(b);}detail.append(wrap);a.append(detail);return a;
+      for(const r of records.slice().reverse()){const b=txt('div',null,'food-row');b.append(txt('strong',this.displayDate(r.date)+' · '+names.get(r.pet_id)+' · '+r.title),txt('p',categories.get(r.category)||r.category,'muted'));if(r.notes)b.append(txt('p',r.notes));if(r.due_date)b.append(txt('p',this.displayDate(r.due_date)+' · '+(r.completed?this.tr('Suivi effectué','Follow-up completed'):this.tr('Suivi ouvert','Open follow-up')),'muted'));wrap.append(b);}detail.append(wrap);a.append(detail);return a;
     }
     today() { try { return new Intl.DateTimeFormat('sv-SE',{timeZone:this._hass?.config?.time_zone||Intl.DateTimeFormat().resolvedOptions().timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); } catch { return ''; } }
     clearMeasurement() {this.day.value=this.today();this.direct.value='';this.gross.value='';this.cage.value='';this.replace.checked=false;this.old.value='';this.updateNet();}
@@ -179,7 +187,7 @@
     }
     refreshOld() {
       const selected=this.old.value;this.old.replaceChildren();this.option(this.old,'',this.tr('Nouvelle pesée','New measurement'));
-      for(const r of sorted(this.lastWeights.get(this.pet.value)?.attributes?.measurements).reverse()) this.option(this.old,r.date,`${r.date} · ${this.fmt(r.grams/1000)} kg`);
+      for(const r of sorted(this.lastWeights.get(this.pet.value)?.attributes?.measurements).reverse()) this.option(this.old,r.date,`${this.displayDate(r.date)} · ${this.fmt(r.grams/1000)} kg`);
       if([...this.old.options].some(o=>o.value===selected))this.old.value=selected;
     }
     loadOld() {
@@ -216,13 +224,16 @@
       this.foodHistory=Array.isArray(hub.attributes.food?.history)?hub.attributes.food.history:[];
       const grid=txt('div',null,'cards');this.summary.append(grid);
       if(!this.profiles.length)grid.append(txt('p',this.tr('Aucun animal. Crée un profil ou importe tes pesées.','No pets. Create a profile or import measurements.')));
-      for(const p of this.profiles)grid.append(this.petCard(p,this.lastWeights.get(p.pet_id)));
+      if(this.profiles.length){const controls=txt('div',null,'chart-controls'),label=txt('span',this.tr('Période des courbes','Chart period')),select=txt('select');select.setAttribute('aria-label',label.textContent);for(const [v,l] of [['baseline',this.tr('Depuis la référence','Since baseline')],['3',this.tr('3 derniers mois','Last 3 months')],['6',this.tr('6 derniers mois','Last 6 months')],['12',this.tr('12 derniers mois','Last 12 months')],['all',this.tr('Tout l’historique','All history')]])this.option(select,v,l);select.value=this.chartPeriod||'baseline';select.addEventListener('change',()=>{this.chartPeriod=select.value;this.refresh();});controls.append(label,select);this.summary.insertBefore(controls,grid);}
+      const series=this.profiles.map(p=>({p,rows:sorted(this.lastWeights.get(p.pet_id)?.attributes?.measurements)}));
+      const domain=this.chartDomain(series);
+      series.forEach(({p,rows},i)=>grid.append(this.petCard(p,rows,domain,COLORS[i%COLORS.length])));
       this.summary.append(this.foodCard(hub.attributes.food));
       this.careHistory=Array.isArray(hub.attributes.care_records)?hub.attributes.care_records:[];
       this.summary.append(this.careCard());
       const cp=this.carePet.value;this.carePet.replaceChildren();for(const p of this.profiles)this.option(this.carePet,p.pet_id,p.name);if(this.profiles.some(p=>p.pet_id===cp))this.carePet.value=cp;
       this.refreshCareOld();this.careDate.max=this.today();if(!this.careDate.value)this.careDate.value=this.today();this.csave.disabled=!!this.busy||!this.profiles.length;
-      const fs=this.foodSelect.value;this.foodSelect.replaceChildren();this.option(this.foodSelect,'',this.tr('Nouvelle période','New period'));for(const r of this.foodHistory)this.option(this.foodSelect,r.start_date,r.start_date+' · '+r.name);if(this.foodHistory.some(r=>r.start_date===fs))this.foodSelect.value=fs;
+      const fs=this.foodSelect.value;this.foodSelect.replaceChildren();this.option(this.foodSelect,'',this.tr('Nouvelle période','New period'));for(const r of this.foodHistory)this.option(this.foodSelect,r.start_date,this.displayDate(r.start_date)+' · '+r.name);if(this.foodHistory.some(r=>r.start_date===fs))this.foodSelect.value=fs;
       this.foodDate.max=this.today();if(!this.foodDate.value)this.foodDate.value=this.today();this.fsave.disabled=!!this.busy;
       const selected=this.pet.value, editing=this.profileSelect.value;this.pet.replaceChildren();this.profileSelect.replaceChildren();this.option(this.profileSelect,'',this.tr('Nouveau profil','New profile'));
       for(const p of this.profiles){this.option(this.pet,p.pet_id,p.name);this.option(this.profileSelect,p.pet_id,p.name);}
@@ -231,28 +242,43 @@
       this.save.disabled=!!this.busy||!this.profiles.length; this.psave.disabled=!!this.busy; this.refreshOld(); if(!this.day.value)this.day.value=this.today();
       this.day.max=this.today();this.baseline.max=this.today();
     }
-    petCard(p,s){
-      const a=txt('section',null,'pet');a.append(txt('h3',p.name),txt('div',this.fmt(p.weight_kg)+' kg','weight'),txt('p',p.latest_date||this.tr('Pas de pesée','No measurements'),'muted'));
+    petCard(p,rows,domain,color){
+      const a=txt('section',null,'pet');const name=txt('h3',p.name);name.style.borderLeft='4px solid '+color;name.style.paddingLeft='8px';const age=this.daysAgo(p.latest_date);const date=p.latest_date?this.displayDate(p.latest_date)+(age===0?' · '+this.tr('Aujourd’hui','Today'):age>0?' · '+this.tr('Il y a '+age+' j',age+' days ago'):''):this.tr('Pas de pesée','No measurements');a.append(name,txt('div',num(p.weight_kg)?this.fmt(p.weight_kg)+' kg':'—','weight'),txt('p',date,'muted'));
       const line=(label,value)=>{const l=txt('div',null,'line');l.append(txt('span',label,'muted'),txt('strong',value));a.append(l);};
-      line(this.tr('Poids cible','Target'),num(p.target_kg)?this.fmt(p.target_kg,3)+' kg':'—');
+      line(this.tr('Poids cible','Target'),num(p.target_kg)?this.pretty(p.target_kg)+' kg':'—');
       line(this.tr('Pesées enregistrées','Recorded weights'),num(p.measurement_count)?p.measurement_count:'—');
-      line(this.tr('Référence','Baseline'),num(p.baseline_kg)?this.fmt(p.baseline_kg)+' kg · '+p.baseline_date:'—');
+      line(this.tr('Référence','Baseline'),num(p.baseline_kg)?this.fmt(p.baseline_kg)+' kg · '+this.displayDate(p.baseline_date):'—');
       line(this.tr('Depuis la référence','Since baseline'),num(p.change_grams)?`${p.change_grams>0?'+':''}${p.change_grams} g`+(num(p.change_percent)?` (${p.change_percent>0?'+':''}${this.fmt(p.change_percent,1)} %)`:''):'—');
       if(num(p.difference_to_target_grams))line(this.tr('Écart à la cible','Difference to target'),`${p.difference_to_target_grams>0?'+':''}${p.difference_to_target_grams} g`);
-      if(num(p.baseline_kg)&&num(p.target_kg)&&num(p.weight_kg)&&p.baseline_kg!==p.target_kg){const progress=(p.baseline_kg-p.weight_kg)/(p.baseline_kg-p.target_kg)*100;const t=txt('div',null,'track'),f=txt('div',null,'fill');f.style.width=Math.max(0,Math.min(100,progress))+'%';t.append(f);a.append(t,txt('p',this.tr('Progression vers la cible : ','Progress toward target: ')+this.fmt(progress,1)+' %','muted'));}
-      const rows=sorted(s?.attributes?.measurements);if(rows.length){a.append(this.graph(rows,p));const detail=txt('details');detail.append(txt('summary',this.tr('Historique des pesées','Weight history')+` (${rows.length})`));const wrap=txt('div',null,'scroll'),table=txt('table'),head=txt('tr');[this.tr('Date','Date'),this.tr('Poids','Weight'),this.tr('Source','Source')].forEach(v=>head.append(txt('th',v)));table.append(head);for(const r of rows.slice().reverse()){const tr=txt('tr');const source={home:this.tr('Domicile','Home'),veterinarian:this.tr('Vétérinaire','Veterinarian'),other:this.tr('Autre','Other')}[r.source]||r.source;[r.date,this.fmt(r.grams/1000)+' kg',source].forEach(v=>tr.append(txt('td',v)));table.append(tr);}wrap.append(table);detail.append(wrap);a.append(detail);}else a.append(txt('p',this.tr('Historique non disponible pour ce capteur.','History unavailable for this sensor.'),'muted'));
+      if(num(p.baseline_kg)&&num(p.target_kg)&&num(p.weight_kg)&&p.baseline_kg!==p.target_kg){const progress=(p.baseline_kg-p.weight_kg)/(p.baseline_kg-p.target_kg)*100;const t=txt('div',null,'track'),f=txt('div',null,'fill');f.style.background=color;f.style.width=Math.max(0,Math.min(100,progress))+'%';t.append(f);a.append(t,txt('p',this.tr('Progression vers la cible : ','Progress toward target: ')+this.fmt(progress,1)+' %','muted'));}
+      if(rows.length){a.append(this.graph(rows,p,domain,color));const detail=txt('details');detail.append(txt('summary',this.tr('Historique des pesées','Weight history')+` (${rows.length})`));const wrap=txt('div',null,'scroll'),table=txt('table'),head=txt('tr');[this.tr('Date','Date'),this.tr('Poids','Weight'),this.tr('Source','Source')].forEach(v=>head.append(txt('th',v)));table.append(head);for(const r of rows.slice().reverse()){const tr=txt('tr');const source={home:this.tr('Domicile','Home'),veterinarian:this.tr('Vétérinaire','Veterinarian'),other:this.tr('Autre','Other')}[r.source]||r.source;[this.displayDate(r.date),this.fmt(r.grams/1000)+' kg',source].forEach(v=>tr.append(txt('td',v)));table.append(tr);}wrap.append(table);detail.append(wrap);a.append(detail);}else a.append(txt('p',this.tr('Historique non disponible pour ce capteur.','History unavailable for this sensor.'),'muted'));
       return a;
     }
-    graph(all,p){
-      const wrapper=txt('div');const select=txt('select');select.setAttribute('aria-label',this.tr('Période du graphique','Chart period'));this.option(select,'baseline',this.tr('Depuis la référence','Since baseline'));this.option(select,'all',this.tr('Tout l’historique','All history'));wrapper.append(select);const chart=txt('div');wrapper.append(chart);
-      const draw=()=>{let rows=select.value==='baseline'&&p.baseline_date?all.filter(r=>r.date>=p.baseline_date):all;if(!rows.length)rows=all;chart.replaceChildren();const values=rows.map(r=>r.grams/1000);if(num(p.target_kg))values.push(p.target_kg);let min=Math.floor((Math.min(...values)-.05)*10)/10,max=Math.ceil((Math.max(...values)+.05)*10)/10;if(max<=min)max=min+.1;const first=Date.parse(rows[0].date),last=Date.parse(rows.at(-1).date),x=d=>first===last?180:43+(Date.parse(d)-first)/(last-first)*295,y=v=>145-(v-min)/(max-min)*125;
-      const g=svg('svg',{viewBox:'0 0 350 177',role:'img','aria-label':this.tr('Courbe de poids datée','Dated weight chart')});
-      for(let i=0;i<=4;i++){const v=min+(max-min)*i/4,yy=y(v);g.append(svg('line',{x1:43,x2:338,y1:yy,y2:yy,stroke:'currentColor',opacity:.15}),svg('text',{x:37,y:yy+3,'text-anchor':'end','font-size':10,fill:'currentColor'},this.fmt(v,2)));}
+    chartDomain(series){
+      const period=this.chartPeriod||'baseline', all=series.flatMap(({p,rows})=>period==='baseline'&&p.baseline_date?rows.filter(r=>r.date>=p.baseline_date):rows);
+      const end=Date.parse(this.today());let first=all.length?Math.min(...all.map(r=>Date.parse(r.date))):end-DAY;
+      let last=all.length?Math.max(...all.map(r=>Date.parse(r.date))):end;
+      if(['3','6','12'].includes(period)&&Number.isFinite(end)){const d=new Date(end),day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()-Number(period));d.setUTCDate(Math.min(day,new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate()));first=d.getTime();last=end;}
+      if(first===last){first-=DAY;last+=DAY;}
+      const vals=all.filter(r=>Date.parse(r.date)>=first&&Date.parse(r.date)<=last).map(r=>r.grams/1000);for(const {p} of series)if(num(p.target_kg))vals.push(p.target_kg);
+      if(!vals.length)vals.push(0,1);const range=Math.max(...vals)-Math.min(...vals);const raw=Math.max(.1,(range+.1)/4),mag=10**Math.floor(Math.log10(raw)),step=([1,2,2.5,5,10].find(v=>v*mag>=raw)||10)*mag;
+      const min=Math.floor((Math.min(...vals)-.03)/step)*step,max=Math.ceil((Math.max(...vals)+.03)/step)*step;
+      return {period,first,last,min,max,step};
+    }
+    graph(all,p,d,color){
+      const chart=txt('div');const rows=all.filter(r=>Date.parse(r.date)>=d.first&&Date.parse(r.date)<=d.last&&(d.period!=='baseline'||!p.baseline_date||r.date>=p.baseline_date));
+      if(!rows.length){chart.append(txt('p',this.tr('Aucune pesée sur cette période.','No measurements in this period.'),'muted'));return chart;}
+      const {first,last,min,max,step}=d,x=t=>43+(t-first)/(last-first)*295,y=v=>145-(v-min)/(max-min)*125;
+      const g=svg('svg',{viewBox:'0 0 350 181',role:'img','aria-label':this.tr('Courbe de poids datée, échelle commune','Dated weight chart, shared scale')});
+      for(let i=0;i<=Math.round((max-min)/step);i++){const v=min+i*step,yy=y(v);g.append(svg('line',{x1:43,x2:338,y1:yy,y2:yy,stroke:'currentColor',opacity:.15}),svg('text',{x:37,y:yy+3,'text-anchor':'end','font-size':10,fill:'currentColor'},this.pretty(v)));}
       if(num(p.target_kg))g.append(svg('line',{x1:43,x2:338,y1:y(p.target_kg),y2:y(p.target_kg),stroke:'var(--success-color,#279557)','stroke-dasharray':'5 4','stroke-width':1.5}));
-      for(const r of this.foodHistory||[]){if(first!==last&&Date.parse(r.start_date)>=first&&Date.parse(r.start_date)<=last){const xx=x(r.start_date);const marker=svg('line',{x1:xx,x2:xx,y1:20,y2:145,stroke:'var(--secondary-text-color,#888)','stroke-dasharray':'2 3','stroke-width':1.5});marker.append(svg('title',{},r.start_date+' · '+r.name));g.append(marker);}}
-      g.append(svg('polyline',{points:rows.map(r=>`${x(r.date)},${y(r.grams/1000)}`).join(' '),stroke:'var(--primary-color,#039be5)','stroke-width':2,fill:'none','stroke-linejoin':'round'}));
-      for(const r of rows){const c=svg('circle',{cx:x(r.date),cy:y(r.grams/1000),r:3,fill:'var(--primary-color,#039be5)'});c.append(svg('title',{},`${r.date} · ${this.fmt(r.grams/1000)} kg`));g.append(c);}
-      g.append(svg('text',{x:43,y:165,'font-size':10,fill:'currentColor'},rows[0].date));if(first!==last)g.append(svg('text',{x:338,y:165,'text-anchor':'end','font-size':10,fill:'currentColor'},rows.at(-1).date));chart.append(g);if(num(p.target_kg))chart.append(txt('p',this.tr('Pointillés : poids cible','Dashed line: target weight'),'muted'));if((this.foodHistory||[]).some(r=>Date.parse(r.start_date)>=first&&Date.parse(r.start_date)<=last))chart.append(txt('p',this.tr('Repères verticaux : changements alimentaires déclarés.','Vertical markers: recorded food changes.'),'muted'));};select.addEventListener('change',draw);draw();return wrapper;
+      for(const r of this.foodHistory||[]){const t=Date.parse(r.start_date);if(t>=first&&t<=last){const xx=x(t),marker=svg('line',{x1:xx,x2:xx,y1:20,y2:145,stroke:'var(--secondary-text-color,#888)','stroke-dasharray':'2 3','stroke-width':1.5});marker.append(svg('title',{},this.displayDate(r.start_date)+' · '+r.name));g.append(marker);}}
+      g.append(svg('polyline',{points:rows.map(r=>`${x(Date.parse(r.date))},${y(r.grams/1000)}`).join(' '),stroke:color,'stroke-width':2,fill:'none','stroke-linejoin':'round'}));
+      for(const r of rows){const c=svg('circle',{cx:x(Date.parse(r.date)),cy:y(r.grams/1000),r:3,fill:color});c.append(svg('title',{},`${this.displayDate(r.date)} · ${this.fmt(r.grams/1000)} kg`));g.append(c);}
+      const months=(last-first)/(DAY*30.44),stride=Math.max(1,Math.ceil(months/4)),tick=new Date(first);tick.setUTCDate(1);if(tick.getTime()<first)tick.setUTCMonth(tick.getUTCMonth()+1);
+      for(;tick.getTime()<=last;tick.setUTCMonth(tick.getUTCMonth()+stride)){const xx=x(tick.getTime());g.append(svg('line',{x1:xx,x2:xx,y1:145,y2:149,stroke:'currentColor',opacity:.5}),svg('text',{x:xx,y:161,'text-anchor':'middle','font-size':9,fill:'currentColor'},new Intl.DateTimeFormat(this.fr?'fr-FR':'en-GB',{month:'short',year:'2-digit',timeZone:'UTC'}).format(tick)));}
+      const iso=t=>new Date(t).toISOString().slice(0,10);g.append(svg('text',{x:43,y:177,'font-size':9,fill:'currentColor'},this.displayDate(iso(first))),svg('text',{x:338,y:177,'text-anchor':'end','font-size':9,fill:'currentColor'},this.displayDate(iso(last))));chart.append(g);
+      if(num(p.target_kg))chart.append(txt('p',this.tr('Pointillés : poids cible','Dashed line: target weight'),'muted'));if((this.foodHistory||[]).some(r=>Date.parse(r.start_date)>=first&&Date.parse(r.start_date)<=last))chart.append(txt('p',this.tr('Repères verticaux : changements alimentaires déclarés.','Vertical markers: recorded food changes.'),'muted'));return chart;
     }
   }
   if (!customElements.get('mova-pet-health-card')) customElements.define('mova-pet-health-card',MovaPetHealthCard);
