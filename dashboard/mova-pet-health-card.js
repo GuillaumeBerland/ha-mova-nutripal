@@ -19,7 +19,7 @@
   class MovaPetHealthCard extends HTMLElement {
     setConfig(config) {
       if (!/^sensor\.[a-z0-9_]+$/.test(config.entity || '')) throw new Error('Select the pet health sensor');
-      this.config = {...config}; this.fr = config.language !== 'en'; this.lastHub = null; this.lastWeights = new Map();
+      this.config = {...config}; this.fr = config.language !== 'en'; this.lastHub = null; this.lastWeights = new Map(); this.lastDay = null;
       if (!this.shadowRoot) this.attachShadow({mode:'open'});
       this.build(); if (this._hass) this.hass = this._hass;
     }
@@ -32,8 +32,9 @@
       if (!this.config || !this.summary) return;
       const hub = hass.states[this.config.entity];
       const weights = getWeights(hass.states, hub?.attributes?.health_scope);
-      const same = this.lastHub === hub && weights.size === this.lastWeights.size && [...weights].every(([k,v]) => this.lastWeights.get(k) === v);
-      if (!same) { this.lastHub = hub; this.lastWeights = weights; this.refresh(); }
+      const day = this.today();
+      const same = this.lastDay === day && this.lastHub === hub && weights.size === this.lastWeights.size && [...weights].every(([k,v]) => this.lastWeights.get(k) === v);
+      if (!same) { this.lastDay = day; this.lastHub = hub; this.lastWeights = weights; this.refresh(); }
     }
     build() {
       this.shadowRoot.replaceChildren();
@@ -81,6 +82,7 @@
       this.psave=txt('button',this.tr('Enregistrer le profil','Save profile'));this.psave.type='submit';pf.append(this.psave);this.pmsg=txt('div','','status');this.pmsg.setAttribute('role','status');pf.append(this.pmsg);
       this.profileSelect.addEventListener('change',()=>this.loadProfile()); pf.addEventListener('submit',e=>{e.preventDefault();this.saveProfile();});this.forms.append(p);
       this.buildFoodForm();
+      this.buildCareForm();
       this.clearMeasurement();
     }
     buildFoodForm(){
@@ -129,6 +131,43 @@
       const detail=txt('details');detail.append(txt('summary',this.tr('Historique alimentaire','Food history')+` (${this.foodHistory.length})`));const wrap=txt('div',null,'scroll');
       for(const r of this.foodHistory.slice().reverse()){const b=txt('div',null,'food-row');b.append(txt('strong',r.start_date+' · '+r.name),txt('p',(r.components||[]).map(x=>`${x.name} : ${this.fmt(x.percent,2)} %`).join(' · '),'muted'));if(num(r.portion_g))b.append(txt('p',this.tr('Référence déclarée : ','Declared reference: ')+this.fmt(r.portion_g,2)+' g','muted'));wrap.append(b);}detail.append(wrap);a.append(detail);return a;
     }
+    careCategories(){return [['consultation',this.tr('Consultation','Consultation')],['vaccination',this.tr('Vaccin','Vaccination')],['deworming',this.tr('Vermifuge','Deworming')],['parasite_control',this.tr('Antiparasitaire','Parasite control')],['treatment',this.tr('Traitement','Treatment')],['observation',this.tr('Observation','Observation')],['other',this.tr('Autre','Other')]];}
+    buildCareForm(){
+      const d=txt('details');d.append(txt('summary',this.tr('Ajouter ou corriger un événement de santé','Add or correct a care record')));const f=txt('form');d.append(f);
+      this.carePet=this.field(f,this.tr('Animal','Pet'),'select',{required:true});
+      this.careOld=this.field(f,this.tr('Événement existant','Existing record'),'select');
+      this.careDate=this.field(f,this.tr('Date de l’événement','Event date'),'date',{required:true});
+      this.careCategory=this.field(f,this.tr('Catégorie','Category'),'select');for(const [v,l] of this.careCategories())this.option(this.careCategory,v,l);
+      this.careTitle=this.field(f,this.tr('Intitulé','Title'),'text',{required:true,maxLength:100});
+      this.careNotes=this.field(f,this.tr('Notes (facultatif)','Notes (optional)'),'text',{maxLength:500});
+      this.careDue=this.field(f,this.tr('Prochaine échéance (facultatif)','Follow-up date (optional)'),'date');
+      const check=(label)=>{const l=txt('label',null,'check'),i=txt('input');i.type='checkbox';l.append(i,document.createTextNode(label));f.append(l);return i;};
+      this.careDone=check(this.tr('Suivi effectué','Follow-up completed'));this.careReplace=check(this.tr('Autoriser la correction','Allow correction'));
+      f.append(txt('p',this.tr('Les échéances sont saisies manuellement selon les consignes du vétérinaire. Aucun traitement ni calendrier automatique.','Enter follow-up dates manually according to veterinary instructions. No automatic treatment or schedule.'),'muted'));
+      this.csave=txt('button',this.tr('Enregistrer l’événement','Save care record'));this.csave.type='submit';f.append(this.csave);this.cmsg=txt('div','','status');this.cmsg.setAttribute('role','status');f.append(this.cmsg);
+      this.carePet.addEventListener('change',()=>{this.refreshCareOld(false);this.loadCare();});this.careOld.addEventListener('change',()=>this.loadCare());f.addEventListener('submit',e=>{e.preventDefault();this.saveCare();});this.forms.append(d);
+      this.careDate.value=this.today();
+    }
+    refreshCareOld(preserve=true){const prev=preserve?this.careOld.value:'';this.careOld.replaceChildren();this.option(this.careOld,'',this.tr('Nouvel événement','New record'));for(const r of (this.careHistory||[]).filter(r=>r.pet_id===this.carePet.value).slice().reverse())this.option(this.careOld,r.record_id,r.date+' · '+r.title);if([...this.careOld.options].some(o=>o.value===prev))this.careOld.value=prev;}
+    loadCare(){const r=(this.careHistory||[]).find(r=>r.record_id===this.careOld.value&&r.pet_id===this.carePet.value);this.careDate.value=r?.date||this.today();this.careCategory.value=r?.category||'consultation';this.careTitle.value=r?.title||'';this.careNotes.value=r?.notes||'';this.careDue.value=r?.due_date||'';this.careDone.checked=!!r?.completed;this.careReplace.checked=false;}
+    async saveCare(){
+      if(this.busy)return;
+      const id=this.careOld.value;const record={pet_id:this.carePet.value,date:this.careDate.value,category:this.careCategory.value,title:this.careTitle.value,notes:this.careNotes.value,completed:this.careDone.checked};if(this.careDue.value)record.due_date=this.careDue.value;
+      if(!record.pet_id||!record.date)return;
+      if(record.completed&&!record.due_date){this.cmsg.textContent=this.tr('Une échéance est nécessaire pour marquer le suivi effectué.','A follow-up date is required to mark it completed.');return;}
+      if(id&&(!this.careReplace.checked||!window.confirm(this.tr('Corriger cet événement existant ?','Correct this existing record?'))))return;
+      const data={record,replace_existing:!!id};if(id)data.record_id=id;
+      if(await this.action('record_pet_care',data,this.csave,this.cmsg)){this.careOld.value='';this.loadCare();}
+    }
+    careCard(){
+      const a=txt('section',null,'food-row');a.append(txt('h3',this.tr('Carnet de santé','Care log')));
+      const names=new Map(this.profiles.map(p=>[p.pet_id,p.name]));const categories=new Map(this.careCategories());const today=this.today();
+      const records=this.careHistory;const due=records.filter(r=>r.due_date&&!r.completed).slice().sort((x,y)=>x.due_date.localeCompare(y.due_date));
+      a.append(txt('strong',this.tr('Échéances déclarées','Recorded follow-ups')));if(!due.length)a.append(txt('p',this.tr('Aucune échéance ouverte.','No open follow-ups.'),'muted'));
+      const pending=txt('div',null,'scroll');for(const r of due){const b=txt('div',null,'food-row');b.append(txt('strong',names.get(r.pet_id)+' · '+r.title),txt('p',r.due_date+' · '+(r.due_date<today?this.tr('En retard','Overdue'):r.due_date===today?this.tr('Aujourd’hui','Today'):this.tr('À venir','Upcoming')),r.due_date<today?'error':'muted'));pending.append(b);}a.append(pending);
+      const detail=txt('details');detail.append(txt('summary',this.tr('Historique vétérinaire et observations','Veterinary and observation history')+` (${records.length})`));const wrap=txt('div',null,'scroll');
+      for(const r of records.slice().reverse()){const b=txt('div',null,'food-row');b.append(txt('strong',r.date+' · '+names.get(r.pet_id)+' · '+r.title),txt('p',categories.get(r.category)||r.category,'muted'));if(r.notes)b.append(txt('p',r.notes));if(r.due_date)b.append(txt('p',r.due_date+' · '+(r.completed?this.tr('Suivi effectué','Follow-up completed'):this.tr('Suivi ouvert','Open follow-up')),'muted'));wrap.append(b);}detail.append(wrap);a.append(detail);return a;
+    }
     today() { try { return new Intl.DateTimeFormat('sv-SE',{timeZone:this._hass?.config?.time_zone||Intl.DateTimeFormat().resolvedOptions().timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); } catch { return ''; } }
     clearMeasurement() {this.day.value=this.today();this.direct.value='';this.gross.value='';this.cage.value='';this.replace.checked=false;this.old.value='';this.updateNet();}
     updateNet() {
@@ -151,10 +190,10 @@
     loadProfile(){const p=this.profiles.find(p=>p.pet_id===this.profileSelect.value);this.pid.readOnly=!!p;this.pid.value=p?.pet_id||'';this.name.value=p?.name||'';this.target.value=p?.target_kg??'';this.baseline.value=p?.baseline_date||'';}
     async action(service,data,button,msg) {
       if(this.busy || !this.lastHub || ['unknown','unavailable'].includes(this.lastHub.state))return false;
-      this.busy=true;this.save.disabled=true;this.psave.disabled=true;this.fsave.disabled=true;msg.className='status';msg.textContent=this.tr('Enregistrement…','Saving…');
+      this.busy=true;this.save.disabled=true;this.psave.disabled=true;this.fsave.disabled=true;this.csave.disabled=true;msg.className='status';msg.textContent=this.tr('Enregistrement…','Saving…');
       try {await this._hass.callService('mova_nutripal',service,data,{entity_id:this.config.entity});msg.textContent=this.tr('Enregistré.','Saved.');return true;}
       catch(e){msg.className='status error';msg.textContent=this.tr('Échec : ','Failed: ')+(e?.message||String(e));return false;}
-      finally{this.busy=false;this.save.disabled=!this.profiles?.length;this.psave.disabled=false;this.fsave.disabled=false;}
+      finally{this.busy=false;this.save.disabled=!this.profiles?.length;this.psave.disabled=false;this.fsave.disabled=false;this.csave.disabled=!this.profiles?.length;}
     }
     async saveMeasurement(){
       if(this.busy)return;
@@ -179,6 +218,10 @@
       if(!this.profiles.length)grid.append(txt('p',this.tr('Aucun animal. Crée un profil ou importe tes pesées.','No pets. Create a profile or import measurements.')));
       for(const p of this.profiles)grid.append(this.petCard(p,this.lastWeights.get(p.pet_id)));
       this.summary.append(this.foodCard(hub.attributes.food));
+      this.careHistory=Array.isArray(hub.attributes.care_records)?hub.attributes.care_records:[];
+      this.summary.append(this.careCard());
+      const cp=this.carePet.value;this.carePet.replaceChildren();for(const p of this.profiles)this.option(this.carePet,p.pet_id,p.name);if(this.profiles.some(p=>p.pet_id===cp))this.carePet.value=cp;
+      this.refreshCareOld();this.careDate.max=this.today();if(!this.careDate.value)this.careDate.value=this.today();this.csave.disabled=!!this.busy||!this.profiles.length;
       const fs=this.foodSelect.value;this.foodSelect.replaceChildren();this.option(this.foodSelect,'',this.tr('Nouvelle période','New period'));for(const r of this.foodHistory)this.option(this.foodSelect,r.start_date,r.start_date+' · '+r.name);if(this.foodHistory.some(r=>r.start_date===fs))this.foodSelect.value=fs;
       this.foodDate.max=this.today();if(!this.foodDate.value)this.foodDate.value=this.today();this.fsave.disabled=!!this.busy;
       const selected=this.pet.value, editing=this.profileSelect.value;this.pet.replaceChildren();this.profileSelect.replaceChildren();this.option(this.profileSelect,'',this.tr('Nouveau profil','New profile'));

@@ -385,6 +385,24 @@
           "description": "Explicitly allow correction of the period on that date."
         }
       }
+    },
+    "record_pet_care": {
+      "name": "Record pet care",
+      "description": "Local care log. Follow-up dates are entered manually, not medical recommendations.",
+      "fields": {
+        "record": {
+          "name": "Record",
+          "description": "Pet, date, category, title, optional notes and follow-up date."
+        },
+        "record_id": {
+          "name": "Existing record ID",
+          "description": "For correction of an existing record."
+        },
+        "replace_existing": {
+          "name": "Allow replacement",
+          "description": "Explicit permission to correct."
+        }
+      }
     }
   }
 }

@@ -111,3 +111,24 @@ local `mova-pet-health-card.js` resource and increment the resource query string
 (e.g. `?v=2`) to avoid using the cached alpha.2 JavaScript. Use `--health-ui` when
 generating the dashboard to enable the interactive card. The native fallback can
 be used without the resource. Existing pet history is retained.
+
+## Care log (v0.2.6-alpha.4)
+
+The interactive card adds a care log per pet, for completed visits, vaccinations,
+parasite control, deworming, treatments and observations. Enter the actual event
+date, a title and optional notes. A follow-up date is optional and is specified
+by the user or veterinarian, never calculated from a treatment name. Open
+follow-ups are sorted by due date, with overdue/today/upcoming indicators. To
+mark a follow-up done or correct an event, select the existing record and
+explicitly confirm its replacement. Identical new records are ignored; different
+records on the same date are allowed. No push notification, recurring schedule,
+medical recommendation, attachment, or deletion is provided by this release.
+The read-only native view shows the recorded event count.
+
+After upgrading the integration, replace the local card file and bump the
+resource URL to `/local/mova-pet-health-card.js?v=3`, then reload the browser.
+Existing profiles, weights and food periods are migrated without changes.
+Back up HA before upgrading; downgrading after the new storage is written
+requires restoring the pre-upgrade health file (older releases reject unknown
+storage fields). The log is local but is visible to HA users with access to the
+health sensor. History attributes are excluded from normal Recorder history.

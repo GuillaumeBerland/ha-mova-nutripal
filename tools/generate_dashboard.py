@@ -587,7 +587,11 @@ def pet_health_card(e, lang, interactive=False):
              "{% for c in food.current.components %}{{ c.name|e }} : {{ '%g'|format(c.percent) }} %\n{% endfor %}",
              tr('Ration cible déclarée :', 'Declared target ration:')+" {% if is_number(food.current.ration_g) %}{{ '%g'|format(food.current.ration_g) }} g/j{% else %}—{% endif %}",
              tr('Énergie estimée de la ration :', 'Estimated ration energy:')+" {% if is_number(food.current.ration_kcal) %}{{ '%g'|format(food.current.ration_kcal) }} kcal/j{% else %}—{% endif %}",
-             "{% endif %}{% endif %}",
+             "{% endif %}",
+             "{% set care = state_attr('"+hub+"', 'care_records') or [] %}",
+             "## "+tr('Carnet de santé','Care log'),
+             tr('Événements enregistrés :','Recorded events:')+" {{ care|length }}",
+             "{% endif %}",
              tr('Les actions de santé ne modifient pas la distribution.', 'Health actions do not change dispensing.')]
     return dict(_markdown('\n'.join(lines), [hub]), title=tr('Suivi du poids','Weight tracking'))
 

@@ -9,6 +9,7 @@ import re
 
 from .state_store import save_state
 from .food_profiles import load_periods, record_period, describe_period
+from .veterinary_records import load_records, record_care
 
 MAX_PETS = 20
 MAX_WEIGHTS = 1000
@@ -94,9 +95,10 @@ class PetHealth:
     def __init__(self, state=None):
         self.pets = {}
         self.food_periods = []
+        self.care_records = []
         if state is None:
             return
-        if not isinstance(state, dict) or not {'pets'} <= state.keys() or set(state) - {'pets', 'food_periods'} or not isinstance(state['pets'], dict) or len(state['pets']) > MAX_PETS:
+        if not isinstance(state, dict) or not {'pets'} <= state.keys() or set(state) - {'pets', 'food_periods', 'care_records'} or not isinstance(state['pets'], dict) or len(state['pets']) > MAX_PETS:
             raise ValueError('Invalid pet health state')
         self.food_periods = load_periods(state.get('food_periods', []))
         for key, profile in state['pets'].items():
@@ -116,8 +118,13 @@ class PetHealth:
                 baseline_date=None if baseline is None else _date(baseline),
                 measurements=sorted(rows, key=lambda row: row['date']))
 
+        self.care_records = load_records(state.get('care_records', []), self.pets)
+
+    def record_care(self, *, record, today, record_id=None, replace_existing=False):
+        self.care_records = record_care(self.care_records, self.pets, record, today, record_id, replace_existing)
+
     def export(self):
-        return {'pets': deepcopy(self.pets), 'food_periods': deepcopy(self.food_periods)}
+        return {'pets': deepcopy(self.pets), 'food_periods': deepcopy(self.food_periods), 'care_records': deepcopy(self.care_records)}
 
     def record_food_period(self, *, period, today, replace_existing=False):
         self.food_periods = record_period(self.food_periods, period, today, replace_existing)

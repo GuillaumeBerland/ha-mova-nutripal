@@ -385,6 +385,24 @@
           "description": "Autoriser explicitement la correction de la période à cette date."
         }
       }
+    },
+    "record_pet_care": {
+      "name": "Enregistrer un soin",
+      "description": "Carnet local. Dates de suivi saisies manuellement, sans recommandation médicale.",
+      "fields": {
+        "record": {
+          "name": "Événement",
+          "description": "Animal, date, catégorie, titre, notes et échéance facultative."
+        },
+        "record_id": {
+          "name": "Identifiant existant",
+          "description": "Pour corriger un événement existant."
+        },
+        "replace_existing": {
+          "name": "Autoriser la correction",
+          "description": "Confirmation explicite de la correction."
+        }
+      }
     }
   }
 }

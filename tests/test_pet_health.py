@@ -234,3 +234,14 @@ class PetHealthAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(attrs['food']['current']['portion_g'],6.8)
         self.assertFalse(attrs['food']['used_for_feeding'])
         self.assertEqual(health.load_health(self.manager.path).food_summary(TODAY),attrs['food'])
+
+    async def test_care_action_targets_exact_hub_and_persists(self):
+        sensor=await self.create()
+        record={'pet_id':'cat_a','date':'2026-11-20','category':'consultation','title':'Example visit','due_date':'2026-12-20'}
+        call=types.SimpleNamespace(data={'record':record})
+        for targets in ([],[sensor],[self.hub,sensor]):
+            with self.assertRaises(RuntimeError):await self.adapter._record_pet_care(targets,call)
+        await self.adapter._record_pet_care([self.hub],call)
+        rows=self.hub.extra_state_attributes['care_records'];self.assertEqual(len(rows),1)
+        self.assertEqual(health.load_health(self.manager.path).export()['care_records'],rows)
+        self.assertIn('care_records',self.hub._unrecorded_attributes)

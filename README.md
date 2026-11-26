@@ -144,3 +144,31 @@ per period is supported; identical imports are idempotent, and explicit
 replacement is required for corrections. Existing weight records migrate on
 first save. Back up the health JSON before downgrading to alpha.2, which does not
 understand the new `food_periods` field. No history is automatically deleted.
+
+### Local care log (v0.2.6-alpha.4)
+
+The optional health dashboard supports individual care records and manually
+specified follow-up dates. No reminder notifications or automatic care schedules
+are created. Up to 500 records per feeder are retained; reaching the limit
+rejects further additions rather than deleting data. See [dashboard setup](dashboard/README.md).
+
+The `mova_nutripal.record_pet_care` action targets exactly one pet health sensor.
+Example (generic pet ID, illustrative dates only):
+
+```yaml
+action: mova_nutripal.record_pet_care
+target:
+  entity_id: sensor.example_pet_health
+data:
+  record:
+    pet_id: example_cat
+    date: '2026-11-20'
+    category: consultation
+    title: Routine visit
+    notes: Follow-up date supplied by veterinarian
+    due_date: '2026-12-20'
+```
+
+A correction requires the existing `record_id` and `replace_existing: true`.
+Set `completed: true` with a due date to mark a recorded follow-up done.
+Records never modify feeding settings, medications or veterinary schedules.

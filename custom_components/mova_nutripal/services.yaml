@@ -135,3 +135,20 @@ record_food_period:
       default: false
       selector:
         boolean:
+record_pet_care:
+  target:
+    entity:
+      integration: mova_nutripal
+      domain: sensor
+  fields:
+    record:
+      required: true
+      selector:
+        object: {}
+    record_id:
+      selector:
+        text:
+    replace_existing:
+      default: false
+      selector:
+        boolean:

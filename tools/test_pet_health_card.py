@@ -80,6 +80,25 @@ def run(browser):
     assert page.evaluate('card.foodFields.length') == 2
     assert page.evaluate('card.foodPortion.value') == '6.8'
     assert not page.evaluate('card.foodReplace.checked')
+    # Veterinary entry, history and correction are scoped to one animal.
+    root.locator('form').nth(3).evaluate('(f)=>f.parentElement.open=true')
+    page.evaluate("""()=>{card.carePet.value='cat_b';card.carePet.dispatchEvent(new Event('change'));card.careDate.value='2024-10-30';card.careCategory.value='vaccination';card.careTitle.value='Example vaccine';card.careNotes.value='Example notes';card.careDue.value='2025-10-30';}""")
+    root.get_by_role('button',name='Enregistrer l’événement').click()
+    page.wait_for_function('calls.length===5')
+    assert page.evaluate('calls[4]') == ['mova_nutripal','record_pet_care',{'record':{'pet_id':'cat_b','date':'2024-10-30','category':'vaccination','title':'Example vaccine','notes':'Example notes','completed':False,'due_date':'2025-10-30'},'replace_existing':False},{'entity_id':'sensor.hub'}]
+    page.evaluate("""()=>{const r={...calls[4][2].record,record_id:'a'.repeat(32)};hass.states['sensor.hub']={...hass.states['sensor.hub'],attributes:{...hass.states['sensor.hub'].attributes,care_records:[r]}};card.hass=hass;card.careOld.value=r.record_id;card.loadCare();}""")
+    assert 'Example vaccine' in root.locator('ha-card').inner_text()
+    assert 'En retard' in root.locator('ha-card').inner_text()
+    assert page.evaluate('card.careTitle.value') == 'Example vaccine'
+    page.evaluate('card.careDone.checked=true')
+    root.get_by_role('button',name='Enregistrer l’événement').click()
+    assert page.evaluate('calls.length') == 5
+    page.evaluate('card.careReplace.checked=true')
+    page.once('dialog', lambda dialog: dialog.accept())
+    root.get_by_role('button',name='Enregistrer l’événement').click()
+    page.wait_for_function('calls.length===6')
+    assert page.evaluate('calls[5][2].record.completed') is True
+    assert page.evaluate('calls[5][2].record_id') == 'a'*32
     # Narrow layout and unavailable hub. Form must be hidden and no actions fired.
     page.set_viewport_size({'width':390,'height':800})
     assert root.evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
@@ -88,7 +107,7 @@ def run(browser):
     assert 'indisponible' in root.locator('ha-card').inner_text()
     assert not errors, errors
     page.close()
-    print('Browser smoke test OK (charts, scope, cage entry, correction, profile, error, mobile, unavailable)')
+    print('Browser smoke test OK (charts, scope, cage entry, correction, profile, food, care, error, mobile, unavailable)')
 
 
 if __name__ == '__main__':
