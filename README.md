@@ -94,3 +94,53 @@ measurements:
 ```
 
 Weight sensors expose the latest dated net weight in kg, target, baseline, signed change in grams/percent, difference to target, and the dated `measurements` attribute with weights in integer grams. Imported dates are not backdated in HA Recorder; the future Health dashboard will use the stored dates. The full measurements attribute is excluded from Recorder to avoid growing its database with repeated copies. The local versioned JSON file is `.storage/mova_nutripal.<entry_id>.pet_health.json`, independent of feeding/calibration data. Back it up; do not publish it or personal import files. Invalid or failed storage disables health writes rather than silently overwriting history. Data is retained on entry removal; no profile deletion or target clearing UI/action yet. Limit: 20 profiles, 1000 dated weights per profile, one measurement per date; limits reject new data rather than delete older measurements. The native Health dashboard, medical event tracking and food profiles are planned for subsequent versions. This feature is experimental until tested in HA 2026.11.2.
+
+### Health dashboard (v0.2.6-alpha.2)
+
+The dashboard generator includes a native Health summary when the pet health
+sensor is enabled. An optional bundled local Lovelace card adds dated weight
+charts (including imported measurements), target progress, profile management,
+and direct/carrier weighing and explicit historical corrections. See
+[dashboard installation and health card setup](dashboard/README.md#pet-health-v026-alpha2).
+No change to feeding decisions or cloud polling is made.
+
+### Food profiles (v0.2.6-alpha.3)
+
+The Health view now supports local, dated food periods shared by all animals on
+one feeder. Record the mixture name, component shares by mass (total 100%),
+optional energy densities in kcal/100 g, declared daily target ration and declared
+physical portion reference. The latest period applies from its start date until
+the next recorded period. Record each actual mixture during a transition; do not
+create a future period or infer the date of an unobserved past change.
+
+Use the Health card or `mova_nutripal.record_food_period`, targeting exactly one
+Pet health tracking sensor. Example (illustrative, not a dietary recommendation):
+
+```yaml
+action: mova_nutripal.record_food_period
+target:
+  entity_id: sensor.example_pet_health
+data:
+  period:
+    start_date: "2026-11-26"
+    name: Example mixture
+    components:
+      - name: Food A
+        percent: 70
+      - name: Food B
+        percent: 30
+    ration_g: 100
+    portion_g: 6.8
+  replace_existing: false
+```
+
+The ration and portion reference are historical declarations, not live feeder
+settings. No changes are made to food dispensing, target weights or calibration.
+Calories are calculated only if all components have known energy density; ration
+energy is an estimate, not actual intake. Profiles are shared, not per-pet
+consumption records. The dates appear as markers on weight graphs when inside
+the displayed measurement interval. A maximum of 365 periods and 10 components
+per period is supported; identical imports are idempotent, and explicit
+replacement is required for corrections. Existing weight records migrate on
+first save. Back up the health JSON before downgrading to alpha.2, which does not
+understand the new `food_periods` field. No history is automatically deleted.

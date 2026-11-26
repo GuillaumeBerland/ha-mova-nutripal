@@ -371,6 +371,20 @@
           "description": "Autoriser explicitement la correction d’une pesée à la même date."
         }
       }
+    },
+    "record_food_period": {
+      "name": "Enregistrer une période alimentaire",
+      "description": "Historique local du mélange partagé. Ne modifie aucun réglage de distribution.",
+      "fields": {
+        "period": {
+          "name": "Période alimentaire",
+          "description": "Date de début, nom, composants et pourcentages massiques. Ration, poids par portion et énergie facultatifs."
+        },
+        "replace_existing": {
+          "name": "Autoriser la correction",
+          "description": "Autoriser explicitement la correction de la période à cette date."
+        }
+      }
     }
   }
 }

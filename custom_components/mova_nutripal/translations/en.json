@@ -371,6 +371,20 @@
           "description": "Explicitly allow correction of a measurement on the same date."
         }
       }
+    },
+    "record_food_period": {
+      "name": "Record food period",
+      "description": "Local history of shared food mixture. Does not change feeding settings.",
+      "fields": {
+        "period": {
+          "name": "Food period",
+          "description": "Start date, name, components and percentages by weight. Optional ration, portion weight and energy."
+        },
+        "replace_existing": {
+          "name": "Allow replacement",
+          "description": "Explicitly allow correction of the period on that date."
+        }
+      }
     }
   }
 }

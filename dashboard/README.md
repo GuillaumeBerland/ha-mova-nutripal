@@ -50,3 +50,64 @@ history view labels excluded rows; the physical card displays the latest recorde
 weighing series and whether its proposed value matches the configured reference.
 The three-sample diagnostic progress is no longer the main calibration card when
 the physical reference entity is present. No custom Lovelace cards are required.
+
+## Pet health (v0.2.6-alpha.2)
+
+A fifth **Health** view is generated when the selected feeder has an enabled
+`pet_health` sensor. By default it uses a native read-only Markdown summary of
+all profiles, so the generator continues to work without any frontend resource.
+
+For interactive dated weight charts, entry of direct or carrier-based weights,
+profile editing and explicit correction of previous measurements, install the
+optional self-contained local card. It reads the profile and weight sensor
+attributes in the HA frontend and uses the existing validated health actions.
+It has no external assets, cloud requests or feeding controls. New pets are
+shown without regenerating the dashboard. Imported dates are plotted from the
+local history, not from HA Recorder timestamps.
+
+1. Copy `dashboard/mova-pet-health-card.js` to
+   `/config/www/mova-pet-health-card.js` on the HA host, e.g.:
+
+   ```sh
+   ssh root@HOME_ASSISTANT_IP 'mkdir -p /config/www && cat > /config/www/mova-pet-health-card.js' < dashboard/mova-pet-health-card.js
+   ```
+
+2. In HA, enable Advanced Mode in your user profile if needed. Open Settings >
+   Dashboards > Resources (the three-dot menu), add `/local/mova-pet-health-card.js?v=1`
+   as a **JavaScript module**. With YAML-managed resources add the equivalent
+   `url` and `type: module` to your existing `lovelace.resources` configuration
+   instead. If creating `www` for the first time, a Core restart may be needed
+   before `/local` is served. Reload the browser after adding the resource.
+3. Generate the full dashboard as usual, adding `--health-ui` to the generator
+   command. Without that flag the native read-only summary is used instead.
+4. Import or create profiles using the existing health actions. Historical
+   measurements are read from the individual weight sensors. Do not disable
+   those sensors if you want the historical chart and correction selector.
+   Profile edits and measurements are saved by the backend, not in the browser.
+
+The local card and generated configuration are generic. Keep any private import
+script outside the repository; no personal names or measurements belong in Git.
+A correction requires both an explicit checkbox and confirmation. One weight per
+pet/date remains the rule. Empty optional profile fields preserve existing values;
+clearing targets, deleting profiles or removing weights is not supported yet.
+There are no veterinary records or food profiles in alpha.2. A real HA validation
+is required; the optional offline browser smoke test uses a mocked HA frontend:
+
+```sh
+python tools/test_pet_health_card.py /usr/bin/chromium
+```
+
+This optional test requires Playwright and Chromium; neither is required by the
+integration or the regular Python unit tests.
+
+## Food profiles (v0.2.6-alpha.3)
+
+The optional Health card now includes a shared food profile, mixture components,
+optional declared calories, dated history and an add/correct form. Weight graphs
+show vertical markers for food period start dates within their displayed date
+range. The native read-only Health view also shows the current declared mixture.
+The card never changes live feeding settings or recommends a ration. Update the
+local `mova-pet-health-card.js` resource and increment the resource query string
+(e.g. `?v=2`) to avoid using the cached alpha.2 JavaScript. Use `--health-ui` when
+generating the dashboard to enable the interactive card. The native fallback can
+be used without the resource. Existing pet history is retained.

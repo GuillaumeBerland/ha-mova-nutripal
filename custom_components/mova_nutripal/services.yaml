@@ -121,3 +121,17 @@ record_pet_weights:
       default: false
       selector:
         boolean:
+record_food_period:
+  target:
+    entity:
+      integration: mova_nutripal
+      domain: sensor
+  fields:
+    period:
+      required: true
+      selector:
+        object: {}
+    replace_existing:
+      default: false
+      selector:
+        boolean:

@@ -186,6 +186,13 @@ class PetHealthAdapterTests(unittest.IsolatedAsyncioTestCase):
         await sensor.async_will_remove_from_hass()
         self.assertNotIn(sensor,self.manager.entities)
 
+    async def test_health_scope_links_hub_and_weights(self):
+        sensor = await self.create()
+        self.assertEqual(self.hub.extra_state_attributes['health_scope'], 'entry')
+        self.assertEqual(sensor.extra_state_attributes['health_scope'], 'entry')
+        self.assertEqual(sensor.extra_state_attributes['pet_id'], 'cat_a')
+        self.assertFalse(self.hub.extra_state_attributes['used_for_feeding'])
+
     async def test_failed_write_blocks_and_keeps_previous_model(self):
         await self.create()
         with patch.object(self.adapter,'save_health',side_effect=OSError):
@@ -215,3 +222,15 @@ class PetHealthAdapterTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.gather(self.hub.async_record_pet_weights(pet_id='cat_a',measurements=[direct()]),
             self.hub.async_record_pet_weights(pet_id='cat_a',measurements=[cage()]))
         self.assertEqual(health.load_health(self.manager.path).summary('cat_a')['measurement_count'],2)
+
+    async def test_food_action_exact_target_and_persistence(self):
+        period={'start_date':'2026-11-26','name':'Example','components':[{'name':'Food','percent':100}], 'portion_g':6.8}
+        call=types.SimpleNamespace(data={'period':period})
+        with self.assertRaises(RuntimeError):
+            await self.adapter._record_food_period([self.hub,object()],call)
+        self.assertIsNone(self.manager.model.food_summary(TODAY)['current'])
+        await self.adapter._record_food_period([self.hub],call)
+        attrs=self.hub.extra_state_attributes
+        self.assertEqual(attrs['food']['current']['portion_g'],6.8)
+        self.assertFalse(attrs['food']['used_for_feeding'])
+        self.assertEqual(health.load_health(self.manager.path).food_summary(TODAY),attrs['food'])

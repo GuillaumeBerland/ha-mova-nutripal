@@ -1,7 +1,7 @@
 {
   "domain": "mova_nutripal",
   "name": "MOVA NutriPal",
-  "version": "0.2.6-alpha.1",
+  "version": "0.2.6-alpha.3",
   "config_flow": true,
   "dependencies": ["stream"],
   "codeowners": [

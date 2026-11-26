@@ -8,6 +8,7 @@ import json
 import re
 
 from .state_store import save_state
+from .food_profiles import load_periods, record_period, describe_period
 
 MAX_PETS = 20
 MAX_WEIGHTS = 1000
@@ -92,10 +93,12 @@ class PetHealth:
     """Pure model: callers save a candidate before publishing it to entities."""
     def __init__(self, state=None):
         self.pets = {}
+        self.food_periods = []
         if state is None:
             return
-        if not isinstance(state, dict) or set(state) != {'pets'} or not isinstance(state['pets'], dict) or len(state['pets']) > MAX_PETS:
+        if not isinstance(state, dict) or not {'pets'} <= state.keys() or set(state) - {'pets', 'food_periods'} or not isinstance(state['pets'], dict) or len(state['pets']) > MAX_PETS:
             raise ValueError('Invalid pet health state')
+        self.food_periods = load_periods(state.get('food_periods', []))
         for key, profile in state['pets'].items():
             _pet_id(key)
             if not isinstance(profile, dict) or set(profile) != {'name', 'target_grams', 'baseline_date', 'measurements'}:
@@ -114,7 +117,14 @@ class PetHealth:
                 measurements=sorted(rows, key=lambda row: row['date']))
 
     def export(self):
-        return {'pets': deepcopy(self.pets)}
+        return {'pets': deepcopy(self.pets), 'food_periods': deepcopy(self.food_periods)}
+
+    def record_food_period(self, *, period, today, replace_existing=False):
+        self.food_periods = record_period(self.food_periods, period, today, replace_existing)
+
+    def food_summary(self, today):
+        history = [describe_period(row) for row in self.food_periods if row['start_date'] <= today.isoformat()]
+        return {'current': history[-1] if history else None, 'history': history, 'used_for_feeding': False}
 
     def save_profile(self, *, pet_id, name, today, target_kg=None, baseline_date=None):
         key = _pet_id(pet_id)

@@ -89,7 +89,7 @@ class HealthEntity(SensorEntity):
 
 class PetHealthSensor(HealthEntity):
     _attr_translation_key = 'pet_health'
-    _unrecorded_attributes = frozenset({'profiles'})
+    _unrecorded_attributes = frozenset({'profiles', 'food'})
 
     def __init__(self, manager):
         super().__init__(manager)
@@ -104,10 +104,13 @@ class PetHealthSensor(HealthEntity):
     @property
     def extra_state_attributes(self):
         return {'profiles': [self.manager.model.summary(key) for key in sorted(self.manager.model.pets)],
-                'local_only': True, 'used_for_feeding': False}
+                'food': self.manager.model.food_summary(self.manager.today()), 'local_only': True, 'used_for_feeding': False, 'health_scope': self.manager.entry.entry_id}
 
     async def async_save_pet_profile(self, **kwargs):
         await self.manager.async_change('save_profile', **kwargs)
+
+    async def async_record_food_period(self, **kwargs):
+        await self.manager.async_change('record_food_period', **kwargs)
 
     async def async_record_pet_weights(self, **kwargs):
         await self.manager.async_change('record_weights', **kwargs)
@@ -137,6 +140,7 @@ class PetWeightSensor(HealthEntity):
     @property
     def extra_state_attributes(self):
         summary = self.manager.model.summary(self.pet_id)
+        summary['health_scope'] = self.manager.entry.entry_id
         summary['measurements'] = self.manager.model.export()['pets'][self.pet_id]['measurements']
         return summary
 
@@ -162,6 +166,10 @@ async def async_setup_pet_health(hass, entry, did, async_add_entities):
             vol.Optional('target_kg'): _kg,
             vol.Optional('baseline_date'): cv.date,
         }, _save_profile),
+        ('record_food_period', {
+            vol.Required('period'): dict,
+            vol.Optional('replace_existing', default=False): cv.boolean,
+        }, _record_food_period),
         ('record_pet_weights', {
             vol.Required('pet_id'): str,
             vol.Required('measurements'): list,
@@ -185,3 +193,7 @@ async def _save_profile(entities, call):
 
 async def _record_weights(entities, call):
     await _one_health_sensor(entities).async_record_pet_weights(**call.data)
+
+
+async def _record_food_period(entities, call):
+    await _one_health_sensor(entities).async_record_food_period(**call.data)

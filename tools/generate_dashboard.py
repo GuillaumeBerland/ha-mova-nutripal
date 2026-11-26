@@ -44,7 +44,7 @@ def find_entities(registry, device=None):
         platform = eid.split('.', 1)[0]
         if not isinstance(uid, str):
             continue
-        for key in sorted(GROUPS.get(platform, ()) + OPTIONAL.get(platform, ()), key=len, reverse=True):
+        for key in sorted(GROUPS.get(platform, ()) + OPTIONAL.get(platform, ()) + (('pet_health',) if platform == 'sensor' else ()), key=len, reverse=True):
             if uid.endswith('_' + key):
                 group = row.get('device_id') or row.get('config_entry_id')
                 if group:
@@ -566,7 +566,33 @@ def midnight_card(e, lang):
     return dict(_markdown('\n'.join(lines),[q]),title=tr('Diagnostic du passage à minuit','Midnight boundary diagnostics'))
 
 
-def make_dashboard(e, lang='fr', title='MOVA NutriPal'):
+def pet_health_card(e, lang, interactive=False):
+    """Local health hub: no names, weights or animal IDs are copied into YAML."""
+    hub = e['pet_health']
+    if interactive:
+        return {'type': 'custom:mova-pet-health-card', 'entity': hub, 'language': lang}
+    def tr(a, b): return a if lang == 'fr' else b
+    lines = ["{% set profiles = state_attr('"+hub+"', 'profiles') or [] %}",
+             "{% if states('"+hub+"') in ['unknown','unavailable'] %}",
+             tr('Suivi santé indisponible.', 'Pet health unavailable.'), "{% else %}",
+             "{% for p in profiles %}", "## {{ p.name|e }}",
+             tr('Dernière pesée :', 'Latest weight:')+" {% if is_number(p.weight_kg) %}**{{ '%.3f'|format(p.weight_kg) }} kg** · {{ p.latest_date }}{% else %}—{% endif %}",
+             tr('Poids cible :', 'Target weight:')+" {% if is_number(p.target_kg) %}{{ '%g'|format(p.target_kg) }} kg{% else %}—{% endif %}",
+             tr('Évolution depuis la référence :', 'Change since baseline:')+" {% if is_number(p.change_grams) %}{{ '%+g'|format(p.change_grams) }} g{% else %}—{% endif %}",
+             tr('Pesées enregistrées :', 'Recorded measurements:')+" {{ p.measurement_count }}\n",
+             "{% else %}", tr('Aucun profil. Crée un animal via les actions Home Assistant.', 'No profiles. Create a pet using Home Assistant actions.'),
+             "{% endfor %}",
+             "{% set food = state_attr('"+hub+"', 'food') or {} %}",
+             "{% if food.current %}", "## "+tr('Alimentation déclarée','Declared food'), "**{{ food.current.name|e }}** · {{ food.current.start_date }}",
+             "{% for c in food.current.components %}{{ c.name|e }} : {{ '%g'|format(c.percent) }} %\n{% endfor %}",
+             tr('Ration cible déclarée :', 'Declared target ration:')+" {% if is_number(food.current.ration_g) %}{{ '%g'|format(food.current.ration_g) }} g/j{% else %}—{% endif %}",
+             tr('Énergie estimée de la ration :', 'Estimated ration energy:')+" {% if is_number(food.current.ration_kcal) %}{{ '%g'|format(food.current.ration_kcal) }} kcal/j{% else %}—{% endif %}",
+             "{% endif %}{% endif %}",
+             tr('Les actions de santé ne modifient pas la distribution.', 'Health actions do not change dispensing.')]
+    return dict(_markdown('\n'.join(lines), [hub]), title=tr('Suivi du poids','Weight tracking'))
+
+
+def make_dashboard(e, lang='fr', title='MOVA NutriPal', health_ui=False):
     """V5: everyday essentials first, optional planning/history, diagnostics last."""
     def tr(a,b): return a if lang == 'fr' else b
     def section(heading, icon, contents):
@@ -598,6 +624,13 @@ def make_dashboard(e, lang='fr', title='MOVA NutriPal'):
         history.append(section(tr('Bilans quotidiens','Daily balances'),'mdi:chart-bar',[weekly_card(e,lang),daily_history_card(e,lang)]))
     history.append(section(tr('Évolution des compteurs','Counter history'),'mdi:chart-line',[reg[2]]))
     views.append(view(tr('Historique','History'),'feeding-history','mdi:calendar-text',history,1))
+    if 'pet_health' in e:
+        if health_ui:
+            views.append(dict(title=tr('Santé','Health'), path='pet-health', icon='mdi:heart-pulse',
+                              type='panel', cards=[pet_health_card(e,lang,True)]))
+        else:
+            views.append(view(tr('Santé','Health'),'pet-health','mdi:heart-pulse',[
+                section(tr('Suivi des animaux','Pet health'),'mdi:heart-pulse',[pet_health_card(e,lang)])],1))
     views.append(view(tr('Technique','Technical'),'technical','mdi:cog-outline',[
         section(tr('Régulation hybride','Hybrid regulation'),'mdi:chart-donut',[reg[0], *([midnight_card(e,lang)] if midnight_card(e,lang) else []), reg[1],feed[2]]),
         section(tr('Calibration et entretien','Calibration and maintenance'),'mdi:scale',[tech[0], *([configuration_card(e,lang)] if configuration_card(e,lang) else []), tech[1]]),
@@ -611,10 +644,11 @@ def main():
     parser.add_argument('--device', help='HA device registry ID (only required for multiple feeders)')
     parser.add_argument('--format', choices=('card', 'dashboard'), default='card', help='Single manual card or complete Sections dashboard')
     parser.add_argument('--title', default='MOVA NutriPal', help='Title of a complete dashboard')
+    parser.add_argument('--health-ui', action='store_true', help='Use the optional local health card (requires installed Lovelace resource)')
     args = parser.parse_args()
     try:
         entities = find_entities(json.load(sys.stdin), args.device)
-        config = make_dashboard(entities, args.language, args.title) if args.format == 'dashboard' else make_card(entities, args.language)
+        config = make_dashboard(entities, args.language, args.title, args.health_ui) if args.format == 'dashboard' else make_card(entities, args.language)
     except (ValueError, KeyError, TypeError, AttributeError) as exc:
         parser.exit(1, f'Cannot generate dashboard: {exc}\n')
     # JSON is valid YAML 1.2; no third-party YAML dependency required.
