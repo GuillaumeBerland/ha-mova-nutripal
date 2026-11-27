@@ -195,3 +195,15 @@ See [dashboard upgrade instructions](dashboard/README.md#health-stabilization-v0
 The optional reminders are unchanged. Back up HA before updating and verify
 actual operation in HA, including the midnight feeding boundary. The tests
 are offline and do not establish the accuracy of MOVA's measurements.
+
+### Pet identity and care renewal (v0.2.6-beta.2)
+
+The interactive Health card supports optional local pet photos and custom
+colours, a fallback cat icon, compact care entries and atomic follow-up renewal.
+See the [beta.2 upgrade instructions](dashboard/README.md#pet-identity-and-care-renewal-v026-beta2),
+[visual identity](dashboard/PET_HEALTH_VISUALS.md) and
+[care renewal](dashboard/PET_HEALTH_RENEWAL.md) guides.
+Existing health data is retained; back up before upgrading. A downgrade to
+beta.1 after saving visual fields requires restoring a compatible health file.
+The feeder, calibration, cloud polling and optional reminder automation are
+unchanged. Validate the release on real HA before considering it stable.

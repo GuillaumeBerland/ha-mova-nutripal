@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.6-beta.2 — pet identity and care renewal
+- Optional per-pet colours and local photos, with a default cat icon when no photo is available.
+- Consistent identity in weight cards, charts and compact care entries; category-specific care icons.
+- Renew an open care follow-up and record the new event in one durable local save. Dates are user-declared; no medical schedule is inferred.
+- Existing profiles and histories remain readable. Back up before upgrading; beta.1 cannot load profiles containing new visual fields.
+- Update the existing local Health card resource to `?v=7` with the matching JavaScript file. No dashboard regeneration or re-import required.
+- Add offline regression coverage for visuals, concurrent changes, migration and reminders. Real HA validation remains necessary.
+- No changes to feeding commands, calibration, cloud polling or reminder automation.
+
 ## 0.2.6-beta.1 — health stabilization
 - Consolidate local pet profiles, dated weight history, food periods, care records and optional reminders introduced in 0.2.6 alpha releases.
 - Block health writes after interrupted storage operations until reload; preserve durable data.

@@ -186,3 +186,47 @@ corrections update its content, not its identity. Open weight, food and care
 history sections remain expanded during normal state refreshes. If a storage
 write is interrupted, health writes are disabled until reload; wait for the
 write to settle and verify the saved record after reload before retrying.
+
+## Pet identity and care renewal (v0.2.6-beta.2)
+
+Upgrade from beta.1:
+
+1. Create a Home Assistant backup including the local health store
+   (`.storage/mova_nutripal.<entry_id>.pet_health.json`), configuration and `www`.
+   Keep a copy outside HA. Do not remove the existing integration.
+2. In HACS select the matching beta.2 release, download it and restart Core.
+3. From the matching source checkout, copy the local card (replace the SSH destination):
+
+   ```sh
+   ssh root@HOME_ASSISTANT_IP 'mkdir -p /config/www && cat > /config/www/mova-pet-health-card.js' < dashboard/mova-pet-health-card.js
+   ```
+
+4. Edit the existing JavaScript module resource URL to
+   `/local/mova-pet-health-card.js?v=7`, then reload the browser. Do not create a
+   second resource. No regeneration, re-import or reminder automation change is needed.
+5. Verify existing profiles, weights, food history and care records before editing.
+   Configure photos and colours using [the visual identity guide](PET_HEALTH_VISUALS.md).
+   See [the renewal guide](PET_HEALTH_RENEWAL.md) for the New care button.
+   Cancel a renewal to test the form without creating a fictional medical event.
+   Verify reminders in HA and observe the next actual scheduled meal and midnight boundary.
+
+Photos are optional, stored under `/config/www/pets/`, and may be accessible
+without authentication. Never commit personal photos or private HA data.
+If downgrading after saving a visual field, restore a compatible health backup
+and the matching older card/resource; doing so can discard newer health edits.
+Do not delete the health store to work around an upgrade problem.
+
+Offline development checks (not a substitute for real HA validation):
+
+```sh
+python3 -m pip install -r requirements-dev.txt
+python3 -m unittest discover -s tests -v
+node --check dashboard/mova-pet-health-card.js
+python3 -m pip install playwright
+python3 -m playwright install chromium
+python3 tools/test_pet_health_card.py
+python3 tools/test_pet_health_visuals.py
+```
+
+The Playwright checks run headlessly with its bundled Chromium. Install browser
+system dependencies if requested by Playwright. No real feeder calls are made.

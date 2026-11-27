@@ -1,4 +1,4 @@
-# Renewing a care follow-up (0.2.6-beta.2 development)
+# Renewing a care follow-up (0.2.6-beta.2)
 
 The interactive Health card offers a **New care / Nouveau soin** button for each
 open follow-up. It opens the existing care form in renewal mode. The pet and
