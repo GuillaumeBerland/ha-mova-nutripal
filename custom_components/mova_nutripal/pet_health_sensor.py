@@ -150,7 +150,7 @@ class PetWeightSensor(HealthEntity):
     _attr_device_class = SensorDeviceClass.WEIGHT
     _attr_native_unit_of_measurement = 'kg'
     _attr_suggested_display_precision = 3
-    _unrecorded_attributes = frozenset({'measurements'})
+    _unrecorded_attributes = frozenset({'measurements', 'color', 'photo_url'})
 
     def __init__(self, manager, pet_id):
         super().__init__(manager)
@@ -194,6 +194,8 @@ async def async_setup_pet_health(hass, entry, did, async_add_entities):
             vol.Required('name'): str,
             vol.Optional('target_kg'): _kg,
             vol.Optional('baseline_date'): cv.date,
+            vol.Optional('color'): str,
+            vol.Optional('photo_url'): str,
         }, _save_profile),
         ('record_food_period', {
             vol.Required('period'): dict,

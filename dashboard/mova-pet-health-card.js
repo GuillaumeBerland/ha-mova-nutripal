@@ -2,6 +2,9 @@
 (() => {
   'use strict';
   const COLORS = ['#527fba','#b66e89','#309879','#b08038','#8565b6','#588e9c'];
+  const validColor = v => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
+  const validPhoto = v => typeof v === 'string' && v.length <= 200 && /^\/local\/pets\/[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$/i.test(v) && v.startsWith('/local/pets/');
+  const CARE_ICONS = {consultation:'mdi:stethoscope',vaccination:'mdi:needle',deworming:'mdi:pill',parasite_control:'mdi:shield-bug-outline',treatment:'mdi:medical-bag',observation:'mdi:note-text-outline',other:'mdi:clipboard-text-outline'};
   const DAY = 86400000;
   const SVG = 'http://www.w3.org/2000/svg';
   const num = x => typeof x === 'number' && Number.isFinite(x);
@@ -44,6 +47,7 @@
     build() {
       this.shadowRoot.replaceChildren();
       const style = txt('style',`:host{display:block;max-width:1100px;margin:0 auto;width:100%} ha-card{padding:20px;box-sizing:border-box;color:var(--primary-text-color);font-family:inherit} h2,h3,p{margin:0 0 12px} h2{font-size:21px} h3{font-size:17px} .muted{color:var(--secondary-text-color);font-size:13px} .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px} .pet{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:14px;min-width:0} .food-row{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px;margin-top:12px;min-width:0;display:grid;gap:8px}.food-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:8px 22px}.food-summary .line{margin:3px 0}.mixture{display:flex;height:12px;border-radius:8px;overflow:hidden}.mix-legend{display:flex;flex-wrap:wrap;gap:6px 16px}.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}.chart-controls{display:flex;align-items:center;gap:8px;margin:0 0 12px;flex-wrap:wrap}.weight{font-size:29px;font-weight:650;font-variant-numeric:tabular-nums} .line{display:flex;justify-content:space-between;gap:10px;margin:7px 0} .track{height:8px;background:var(--divider-color,#ddd);border-radius:8px;overflow:hidden;margin:9px 0} .fill{height:100%;background:var(--primary-color,#039be5)} svg{width:100%;height:auto;display:block;margin:10px 0} details{margin:14px 0 0;border-top:1px solid var(--divider-color,#ddd);padding-top:12px} summary{cursor:pointer;font-weight:600} form{display:grid;gap:10px;margin-top:12px} label{display:grid;gap:4px;font-size:14px} input,select,button{box-sizing:border-box;font:inherit;color:inherit;background:var(--card-background-color,var(--primary-background-color));border:1px solid var(--divider-color,#888);border-radius:7px;padding:9px;min-width:0} button{cursor:pointer;background:var(--primary-color,#039be5);color:var(--text-primary-color,#fff);font-weight:600} button:disabled{opacity:.5;cursor:default} .check{display:flex;align-items:center;gap:8px} .check input{width:auto} .error{color:var(--error-color,#c33);white-space:pre-wrap} .status{min-height:1em;font-size:13px;white-space:pre-wrap} .scroll{overflow:auto;max-height:260px} table{border-collapse:collapse;width:100%;font-size:13px} td,th{padding:7px;text-align:left;border-bottom:1px solid var(--divider-color,#ddd)} .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:10px} [hidden]{display:none!important}`);
+      style.textContent += `.identity{display:flex;align-items:center;gap:10px;margin:0 0 12px}.identity h3{margin:0;overflow-wrap:anywhere}.pet-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;flex:0 0 42px;border-radius:50%;overflow:hidden;color:#fff}.pet-avatar ha-icon{--mdc-icon-size:25px}.pet-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.care-entry{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px;padding:10px 0;border-bottom:1px solid var(--divider-color,#ddd)}.care-entry:last-child{border-bottom:0}.care-entry .pet-avatar{width:36px;height:36px;flex-basis:36px}.care-entry .pet-avatar ha-icon{--mdc-icon-size:21px}.care-content{min-width:0;overflow-wrap:anywhere}.care-content p,.care-meta p{margin:3px 0}.care-category{display:flex;gap:5px;align-items:center}.care-category ha-icon{--mdc-icon-size:16px}.care-meta{text-align:right;white-space:nowrap;font-size:13px}.care-meta time{font-weight:600}.care-status{font-size:12px}@media(max-width:440px){.care-entry{grid-template-columns:auto minmax(0,1fr)}.care-meta{grid-column:2;text-align:left;white-space:normal}}`;
       const card = txt('ha-card'); card.append(txt('h2',this.tr('Santé · suivi du poids','Health · weight tracking')));
       this.summary = txt('div',this.tr('Chargement…','Loading…')); card.append(this.summary);
       this.forms = txt('div'); this.forms.hidden=true; card.append(this.forms); this.buildForms();
@@ -83,7 +87,9 @@
       this.name=this.field(pf,this.tr('Nom','Name'),'text',{required:true,maxLength:64});
       this.target=this.field(pf,this.tr('Poids cible (kg)','Target (kg)'),'number',{...opt,required:false});
       this.baseline=this.field(pf,this.tr('Date de référence','Baseline date'),'date');
-      pf.append(txt('p',this.tr('Les champs facultatifs vides conservent les valeurs existantes.','Blank optional fields preserve existing values.'),'muted'));
+      this.profileColor=this.field(pf,this.tr('Couleur (#RRGGBB)','Color (#RRGGBB)'),'text',{maxLength:7,pattern:'#[0-9a-fA-F]{6}',placeholder:'#527fba'});
+      this.profilePhoto=this.field(pf,this.tr('Photo locale (facultatif)','Local photo (optional)'),'text',{maxLength:200,placeholder:'/local/pets/chat.jpg'});
+      pf.append(txt('p',this.tr('Poids et date vides : conserver les valeurs. Couleur vide : automatique. Photo vide : icône de chat. Les photos doivent être placées dans /config/www/pets/.','Blank weight and date preserve values. Blank color uses the palette. Blank photo uses the cat icon. Place photos in /config/www/pets/.'),'muted'));
       this.psave=txt('button',this.tr('Enregistrer le profil','Save profile'));this.psave.type='submit';pf.append(this.psave);this.pmsg=txt('div','','status');this.pmsg.setAttribute('role','status');pf.append(this.pmsg);
       this.profileSelect.addEventListener('change',()=>this.loadProfile()); pf.addEventListener('submit',e=>{e.preventDefault();this.saveProfile();});this.forms.append(p);
       this.buildFoodForm();
@@ -168,14 +174,35 @@
       const data={record,replace_existing:!!id};if(id)data.record_id=id;
       if(await this.action('record_pet_care',data,this.csave,this.cmsg)){this.careOld.value='';this.loadCare();}
     }
+    petColor(p){const index=this.profiles.findIndex(x=>x.pet_id===p.pet_id);return validColor(p.color)?p.color:COLORS[Math.max(0,index)%COLORS.length];}
+    avatar(p){
+      const a=txt('span',null,'pet-avatar');a.style.backgroundColor=this.petColor(p);a.setAttribute('aria-hidden','true');
+      const cat=txt('ha-icon');cat.setAttribute('icon','mdi:cat');a.append(cat);
+      if(validPhoto(p.photo_url)){
+        const img=txt('img');img.alt='';img.addEventListener('error',()=>img.remove(),{once:true});img.addEventListener('load',()=>{cat.hidden=true;},{once:true});img.addEventListener('error',()=>{cat.hidden=false;},{once:true});a.append(img);img.src=p.photo_url;
+      }
+      return a;
+    }
+    careEntry(r,pending){
+      const p=this.profiles.find(p=>p.pet_id===r.pet_id)||{pet_id:r.pet_id,name:r.pet_id};
+      const category=new Map(this.careCategories()).get(r.category)||r.category;
+      const row=txt('div',null,'care-entry'),content=txt('div',null,'care-content'),meta=txt('div',null,'care-meta');
+      const heading=txt('div',null,'care-category'),icon=txt('ha-icon');icon.setAttribute('icon',Object.prototype.hasOwnProperty.call(CARE_ICONS,r.category)?CARE_ICONS[r.category]:CARE_ICONS.other);icon.setAttribute('aria-hidden','true');heading.append(icon,txt('strong',p.name+' — '+category));content.append(heading,txt('p',r.title));
+      if(r.notes)content.append(txt('p',r.notes,'muted'));
+      const date=pending?r.due_date:r.date,time=txt('time',this.displayDate(date));time.dateTime=date;meta.append(time);
+      const today=this.today();
+      const status=pending?(date<today?this.tr('En retard','Overdue'):date===today?this.tr('Aujourd’hui','Today'):this.tr('À venir','Upcoming')):this.tr('Enregistré','Recorded');
+      meta.append(txt('p',status,pending&&date<today?'error care-status':'muted care-status'));
+      if(!pending&&r.due_date)content.append(txt('p',this.displayDate(r.due_date)+' · '+(r.completed?this.tr('Suivi effectué','Follow-up completed'):this.tr('Suivi ouvert','Open follow-up')),'muted'));
+      row.append(this.avatar(p),content,meta);return row;
+    }
     careCard(){
       const a=txt('section',null,'food-row');a.append(txt('h3',this.tr('Carnet de santé','Care log')));
-      const names=new Map(this.profiles.map(p=>[p.pet_id,p.name]));const categories=new Map(this.careCategories());const today=this.today();
       const records=this.careHistory;const due=records.filter(r=>r.due_date&&!r.completed).slice().sort((x,y)=>x.due_date.localeCompare(y.due_date));
-      a.append(txt('strong',this.tr('Échéances déclarées','Recorded follow-ups')));if(!due.length)a.append(txt('p',this.tr('Aucune échéance ouverte.','No open follow-ups.'),'muted'));
-      const pending=txt('div',null,'scroll');for(const r of due){const b=txt('div',null,'food-row');b.append(txt('strong',names.get(r.pet_id)+' · '+r.title),txt('p',this.displayDate(r.due_date)+' · '+(r.due_date<today?this.tr('En retard','Overdue'):r.due_date===today?this.tr('Aujourd’hui','Today'):this.tr('À venir','Upcoming')),r.due_date<today?'error':'muted'));pending.append(b);}a.append(pending);
+      a.append(txt('strong',this.tr('Prochaines échéances','Upcoming follow-ups')));if(!due.length)a.append(txt('p',this.tr('Aucune échéance ouverte.','No open follow-ups.'),'muted'));
+      const pending=txt('div',null,'scroll');for(const r of due)pending.append(this.careEntry(r,true));a.append(pending);
       const detail=txt('details');detail.dataset.historyKey='care';detail.append(txt('summary',this.tr('Historique vétérinaire et observations','Veterinary and observation history')+` (${records.length})`));const wrap=txt('div',null,'scroll');
-      for(const r of records.slice().reverse()){const b=txt('div',null,'food-row');b.append(txt('strong',this.displayDate(r.date)+' · '+names.get(r.pet_id)+' · '+r.title),txt('p',categories.get(r.category)||r.category,'muted'));if(r.notes)b.append(txt('p',r.notes));if(r.due_date)b.append(txt('p',this.displayDate(r.due_date)+' · '+(r.completed?this.tr('Suivi effectué','Follow-up completed'):this.tr('Suivi ouvert','Open follow-up')),'muted'));wrap.append(b);}detail.append(wrap);a.append(detail);return a;
+      for(const r of records.slice().reverse())wrap.append(this.careEntry(r,false));detail.append(wrap);a.append(detail);return a;
     }
     today() { try { return new Intl.DateTimeFormat('sv-SE',{timeZone:this._hass?.config?.time_zone||Intl.DateTimeFormat().resolvedOptions().timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); } catch { return ''; } }
     clearMeasurement() {this.day.readOnly=false;this.day.value=this.today();this.direct.value='';this.gross.value='';this.cage.value='';this.replace.checked=false;this.old.value='';this.updateNet();}
@@ -196,7 +223,7 @@
       if(!r){this.clearMeasurement();return;} this.day.value=r.date;this.day.readOnly=true;this.source.value=r.source;this.method.value=r.method;
       this.direct.value=r.method==='direct'?r.grams/1000:'';this.gross.value=r.method==='cage'?r.gross_grams/1000:'';this.cage.value=r.method==='cage'?r.cage_grams/1000:'';this.replace.checked=false;this.updateNet();
     }
-    loadProfile(){const p=this.profiles.find(p=>p.pet_id===this.profileSelect.value);this.pid.readOnly=!!p;this.pid.value=p?.pet_id||'';this.name.value=p?.name||'';this.target.value=p?.target_kg??'';this.baseline.value=p?.baseline_date||'';}
+    loadProfile(){const p=this.profiles.find(p=>p.pet_id===this.profileSelect.value);this.pid.readOnly=!!p;this.pid.value=p?.pet_id||'';this.name.value=p?.name||'';this.target.value=p?.target_kg??'';this.baseline.value=p?.baseline_date||'';this.profileColor.value=p?.color||'';this.profilePhoto.value=p?.photo_url||'';}
     async action(service,data,button,msg) {
       if(this.busy || !this.lastHub || ['unknown','unavailable'].includes(this.lastHub.state))return false;
       this.busy=true;this.save.disabled=true;this.psave.disabled=true;this.fsave.disabled=true;this.csave.disabled=true;msg.className='status';msg.textContent=this.tr('Enregistrement…','Saving…');
@@ -214,6 +241,9 @@
     async saveProfile(){
       if(this.busy)return;
       const data={pet_id:this.pid.value,name:this.name.value};if(this.target.value!=='')data.target_kg=Number(this.target.value);if(this.baseline.value)data.baseline_date=this.baseline.value;
+      const color=this.profileColor.value.trim(),photo=this.profilePhoto.value.trim();
+      if((color&&!validColor(color))||(photo&&!validPhoto(photo))){this.pmsg.textContent=this.tr('Couleur #RRGGBB ou chemin photo /local/pets/ invalide.','Invalid #RRGGBB color or /local/pets/ photo path.');return;}
+      data.color=color;data.photo_url=photo;
       if(!this.profileSelect.value&&this.profiles.some(p=>p.pet_id===data.pet_id)){this.pmsg.textContent=this.tr('Identifiant déjà utilisé : sélectionne le profil existant.','ID already used: select the existing profile.');return;}
       await this.action('save_pet_profile',data,this.psave,this.pmsg);
     }
@@ -229,7 +259,7 @@
       if(this.profiles.length){const controls=txt('div',null,'chart-controls'),label=txt('span',this.tr('Période des courbes','Chart period')),select=txt('select');select.setAttribute('aria-label',label.textContent);for(const [v,l] of [['baseline',this.tr('Depuis la référence','Since baseline')],['3',this.tr('3 derniers mois','Last 3 months')],['6',this.tr('6 derniers mois','Last 6 months')],['12',this.tr('12 derniers mois','Last 12 months')],['all',this.tr('Tout l’historique','All history')]])this.option(select,v,l);select.value=this.chartPeriod||'baseline';select.addEventListener('change',()=>{this.chartPeriod=select.value;this.refresh();});controls.append(label,select);this.summary.insertBefore(controls,grid);}
       const series=this.profiles.map(p=>({p,rows:sorted(this.lastWeights.get(p.pet_id)?.attributes?.measurements)}));
       const domain=this.chartDomain(series);
-      series.forEach(({p,rows},i)=>grid.append(this.petCard(p,rows,domain,COLORS[i%COLORS.length])));
+      series.forEach(({p,rows})=>grid.append(this.petCard(p,rows,domain,this.petColor(p))));
       this.summary.append(this.foodCard(hub.attributes.food));
       this.careHistory=Array.isArray(hub.attributes.care_records)?hub.attributes.care_records:[];
       this.summary.append(this.careCard());
@@ -246,7 +276,8 @@
       this.day.max=this.today();this.baseline.max=this.today();
     }
     petCard(p,rows,domain,color){
-      const a=txt('section',null,'pet');const name=txt('h3',p.name);name.style.borderLeft='4px solid '+color;name.style.paddingLeft='8px';const age=this.daysAgo(p.latest_date);const date=p.latest_date?this.displayDate(p.latest_date)+(age===0?' · '+this.tr('Aujourd’hui','Today'):age>0?' · '+this.tr('Il y a '+age+' j',age+' days ago'):''):this.tr('Pas de pesée','No measurements');a.append(name,txt('div',num(p.weight_kg)?this.fmt(p.weight_kg)+' kg':'—','weight'),txt('p',date,'muted'));
+      const a=txt('section',null,'pet'),identity=txt('div',null,'identity');identity.append(this.avatar(p),txt('h3',p.name));
+      const age=this.daysAgo(p.latest_date);const date=p.latest_date?this.displayDate(p.latest_date)+(age===0?' · '+this.tr('Aujourd’hui','Today'):age>0?' · '+this.tr('Il y a '+age+' j',age+' days ago'):''):this.tr('Pas de pesée','No measurements');a.append(identity,txt('div',num(p.weight_kg)?this.fmt(p.weight_kg)+' kg':'—','weight'),txt('p',date,'muted'));
       const line=(label,value)=>{const l=txt('div',null,'line');l.append(txt('span',label,'muted'),txt('strong',value));a.append(l);};
       line(this.tr('Poids cible','Target'),num(p.target_kg)?this.pretty(p.target_kg)+' kg':'—');
       line(this.tr('Pesées enregistrées','Recorded weights'),num(p.measurement_count)?p.measurement_count:'—');

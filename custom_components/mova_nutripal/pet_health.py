@@ -54,6 +54,19 @@ def _name(value):
     return value.strip()
 
 
+def _profile_color(value):
+    if not isinstance(value, str) or (value and not re.fullmatch(r'#[0-9a-fA-F]{6}', value)):
+        raise ValueError('Use a color in #RRGGBB format or an empty string')
+    return value.lower()
+
+
+def _profile_photo(value):
+    if not isinstance(value, str) or (value and (len(value) > 200 or not re.fullmatch(
+            r'/local/pets/[a-zA-Z0-9_-]+\.(?i:jpg|jpeg|png|webp)', value))):
+        raise ValueError('Use a local photo under /local/pets/ (jpg, jpeg, png or webp)')
+    return value
+
+
 def _measurement(row, today):
     if not isinstance(row, dict) or not {'date', 'source'} <= row.keys():
         raise ValueError('Each measurement requires a date and source')
@@ -103,7 +116,8 @@ class PetHealth:
         self.food_periods = load_periods(state.get('food_periods', []))
         for key, profile in state['pets'].items():
             _pet_id(key)
-            if not isinstance(profile, dict) or set(profile) != {'name', 'target_grams', 'baseline_date', 'measurements'}:
+            required = {'name', 'target_grams', 'baseline_date', 'measurements'}
+            if not isinstance(profile, dict) or not required <= profile.keys() or set(profile) - required - {'color', 'photo_url'}:
                 raise ValueError('Invalid pet profile')
             target = profile['target_grams']
             baseline = profile['baseline_date']
@@ -117,6 +131,11 @@ class PetHealth:
                 target_grams=None if target is None else _integer_grams(target),
                 baseline_date=None if baseline is None else _date(baseline),
                 measurements=sorted(rows, key=lambda row: row['date']))
+            for field, validate in (('color', _profile_color), ('photo_url', _profile_photo)):
+                if field in profile:
+                    value = validate(profile[field])
+                    if value:
+                        self.pets[key][field] = value
 
         self.care_records = load_records(state.get('care_records', []), self.pets)
 
@@ -133,7 +152,8 @@ class PetHealth:
         history = [describe_period(row) for row in self.food_periods if row['start_date'] <= today.isoformat()]
         return {'current': history[-1] if history else None, 'history': history, 'used_for_feeding': False}
 
-    def save_profile(self, *, pet_id, name, today, target_kg=None, baseline_date=None):
+    def save_profile(self, *, pet_id, name, today, target_kg=None, baseline_date=None,
+                     color=None, photo_url=None):
         key = _pet_id(pet_id)
         old = self.pets.get(key)
         if old is None and len(self.pets) >= MAX_PETS:
@@ -143,6 +163,12 @@ class PetHealth:
         baseline = (old['baseline_date'] if old else None) if baseline_date is None else _date(baseline_date, today)
         profile = dict(name=_name(name), target_grams=target, baseline_date=baseline,
                        measurements=deepcopy(old['measurements']) if old else [])
+        # Omission preserves the setting; an explicit empty string clears it.
+        for field, value, validate in (('color', color, _profile_color),
+                                       ('photo_url', photo_url, _profile_photo)):
+            value = (old or {}).get(field, '') if value is None else validate(value)
+            if value:
+                profile[field] = value
         self.pets[key] = profile
 
     def record_weights(self, *, pet_id, measurements, today, replace_existing=False):
@@ -175,6 +201,7 @@ class PetHealth:
         target = p['target_grams']
         delta = latest['grams'] - baseline['grams'] if latest and baseline else None
         return dict(pet_id=pet_id, name=p['name'], target_kg=target/1000 if target is not None else None,
+            color=p.get('color'), photo_url=p.get('photo_url'),
             baseline_date=baseline['date'] if baseline else p['baseline_date'],
             baseline_kg=baseline['grams']/1000 if baseline else None,
             latest_date=latest['date'] if latest else None,

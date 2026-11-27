@@ -351,6 +351,14 @@
         "baseline_date": {
           "name": "Baseline date",
           "description": "Date of baseline measurement. Optional; otherwise first measurement."
+        },
+        "color": {
+          "name": "Color",
+          "description": "Color #RRGGBB; empty string restores the automatic color."
+        },
+        "photo_url": {
+          "name": "Local photo",
+          "description": "Path /local/pets/name.jpg; empty string removes the photo."
         }
       }
     },

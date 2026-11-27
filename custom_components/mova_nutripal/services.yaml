@@ -103,6 +103,12 @@ save_pet_profile:
     baseline_date:
       selector:
         date:
+    color:
+      selector:
+        text:
+    photo_url:
+      selector:
+        text:
 record_pet_weights:
   target:
     entity:

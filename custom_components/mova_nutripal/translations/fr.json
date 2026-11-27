@@ -351,6 +351,14 @@
         "baseline_date": {
           "name": "Date de référence",
           "description": "Date de la pesée de référence. Facultative ; sinon première pesée."
+        },
+        "color": {
+          "name": "Couleur",
+          "description": "Couleur #RRGGBB ; chaîne vide pour revenir à la couleur automatique."
+        },
+        "photo_url": {
+          "name": "Photo locale",
+          "description": "Chemin /local/pets/nom.jpg ; chaîne vide pour retirer la photo."
         }
       }
     },

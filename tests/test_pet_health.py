@@ -88,6 +88,33 @@ class PetHealthTests(unittest.TestCase):
                 self.record(direct(), row)
         self.assertEqual(self.model.summary('cat_a')['measurement_count'], 0)
 
+    def test_visual_profile_roundtrip_and_clear(self):
+        self.record(direct())
+        old = self.model.export()
+        self.assertNotIn('color', old['pets']['cat_a'])
+        self.model.save_profile(pet_id='cat_a', name='Example cat', today=TODAY,
+                                color='#AABBCC', photo_url='/local/pets/cat_a.webp')
+        loaded = health.PetHealth(self.model.export())
+        self.assertEqual(loaded.summary('cat_a')['color'], '#aabbcc')
+        self.assertEqual(loaded.summary('cat_a')['photo_url'], '/local/pets/cat_a.webp')
+        loaded.save_profile(pet_id='cat_a', name='Renamed', today=TODAY)
+        self.assertEqual(loaded.summary('cat_a')['photo_url'], '/local/pets/cat_a.webp')
+        loaded.save_profile(pet_id='cat_a', name='Example cat', today=TODAY, color='', photo_url='')
+        self.assertEqual(loaded.export(), old)
+
+    def test_visual_profile_rejects_invalid_values_atomically(self):
+        old = self.model.export()
+        for fields in ({'color': 'red'}, {'color': '#123'}, {'photo_url': 'https://example.org/a.jpg'},
+                       {'photo_url': '/local/pets/../secret.jpg'}, {'photo_url': '/local/pets/a.svg'},
+                       {'photo_url': '/local/pets/a.jpg?x=1'}, {'photo_url': '/local/pets/a%2fb.jpg'}):
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                self.model.save_profile(pet_id='cat_a', name='Example cat', today=TODAY, **fields)
+            self.assertEqual(self.model.export(), old)
+        corrupt = self.model.export()
+        corrupt['pets']['cat_a']['photo_url'] = '//example.org/a.jpg'
+        with self.assertRaises(ValueError):
+            health.PetHealth(corrupt)
+
     def test_profile_edit_keeps_history_and_settings(self):
         self.record(direct())
         self.model.save_profile(pet_id='cat_a', name='Renamed', today=TODAY)
