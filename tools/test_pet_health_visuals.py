@@ -104,6 +104,41 @@ def run(browser):
     page.wait_for_function('calls.length===2 && !card.busy')
     assert page.evaluate('calls[1][2].color') == ''
     assert page.evaluate('calls[1][2].photo_url') == ''
+    # Ergonomics: age threshold, countdown, avatar sizing and quick entry.
+    assert root.locator('.pet .weight-age.stale').count() == 2
+    assert first.locator('.pet-avatar').evaluate('(e)=>e.offsetWidth') == 56
+    assert root.locator('.pending-care .pet-avatar').first.evaluate('(e)=>e.offsetWidth') == 44
+    assert root.locator('.pending-care').evaluate("e=>getComputedStyle(e).overflowY") == 'visible'
+    assert root.locator('.pending-care .care-status').all_text_contents() == ['Dans 16 j', 'Dans 16 j']
+    page.evaluate("()=>{card.today=()=> '2024-12-01';card.hass=hass;}")
+    assert root.locator('.pending-care .care-status').all_text_contents() == ['Aujourd’hui', 'Aujourd’hui']
+    page.evaluate("()=>{card.today=()=> '2024-12-02';card.hass=hass;}")
+    assert root.locator('.pending-care .care-status').all_text_contents() == ['En retard de 1 j', 'En retard de 1 j']
+    page.evaluate("()=>{card.today=()=> '2024-11-08';card.hass=hass;}")
+    assert root.locator('.pet .weight-age.stale').count() == 2
+    page.evaluate("()=>{card.today=()=> '2024-11-07';card.hass=hass;}")
+    assert root.locator('.pet .weight-age.stale').count() == 0
+    page.evaluate("()=>{card.setConfig({entity:'sensor.hub',language:'en',weighing_warning_days:0});card.today=()=> '2024-12-02';card.hass=hass;}")
+    assert root.locator('.pet .weight-age.stale').count() == 0
+    assert root.locator('.pending-care .care-status').all_text_contents() == ['Overdue by 1 day', 'Overdue by 1 day']
+    page.evaluate("()=>{card.setConfig({entity:'sensor.hub',language:'fr',weighing_warning_days:10});card.today=()=> '2024-11-15';card.hass=hass;card.clearMeasurement();}")
+    assert root.locator('.pet .weight-age.stale').count() == 2
+    root.get_by_role('button',name='Ajouter une pesée pour Example B').click()
+    assert page.evaluate("card.pet.value==='cat_b' && card.day.value===card.today() && card.save.closest('details').open")
+    page.evaluate("()=>{card.method.value='direct';card.updateNet();card.direct.value='4.123';card.updateNet();}")
+    page.once('dialog', lambda d: d.dismiss())
+    root.get_by_role('button',name='Ajouter une pesée pour Example A').click()
+    assert page.evaluate("card.pet.value==='cat_b' && card.direct.value==='4.123'")
+    page.once('dialog', lambda d: d.accept())
+    root.get_by_role('button',name='Ajouter une pesée pour Example A').click()
+    assert page.evaluate("card.pet.value==='cat_a' && card.direct.value==='' && !card.replace.checked && !card.day.readOnly")
+    root.get_by_role('button',name='Ajouter une pesée pour Example B').click()
+    page.evaluate("()=>{card.direct.value='4.123';card.updateNet();}")
+    root.get_by_role('button',name='Enregistrer la pesée').click()
+    page.wait_for_function('calls.length===3 && !card.busy')
+    assert page.evaluate('calls[2]') == ['mova_nutripal','record_pet_weights',
+        {'pet_id':'cat_b','measurements':[{'date':'2024-11-15','source':'home','weight_kg':4.123}],
+         'replace_existing':False}, {'entity_id':'sensor.hub'}]
     # Responsive card with care entries and a real loaded image.
     page.set_viewport_size({'width':390,'height':800})
     assert root.evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')

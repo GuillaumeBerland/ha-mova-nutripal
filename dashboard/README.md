@@ -230,3 +230,26 @@ python3 tools/test_pet_health_visuals.py
 
 The Playwright checks run headlessly with its bundled Chromium. Install browser
 system dependencies if requested by Playwright. No real feeder calls are made.
+
+## Health ergonomics (0.2.6-beta.3 development)
+
+The **Add a measurement** button opens the existing weighing form with the
+selected pet and today's date. It never saves a measurement on its own.
+An existing weighing draft must be explicitly discarded before starting a new
+one. The measurement method remains selected; the source defaults to Home.
+The age indicator highlights missing or old weighings. Configure the optional
+`weighing_warning_days` integer in the existing custom card YAML (default 7,
+0 disables the warning, maximum 365). This is a display setting only and does
+not change the reminder automation or recommend a weighing interval.
+
+```yaml
+type: custom:mova-pet-health-card
+entity: sensor.example_pet_health
+language: fr
+weighing_warning_days: 7
+```
+
+Follow-up dates now display a relative day count in HA's timezone. No new date
+is calculated or saved. Avatars are larger and up to three upcoming care items
+are shown without an internal scrollbar. Longer lists remain scrollable.
+No data migration or changes to feeding, calibration or cloud logic are needed.

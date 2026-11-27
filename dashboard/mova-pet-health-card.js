@@ -24,7 +24,9 @@
   class MovaPetHealthCard extends HTMLElement {
     setConfig(config) {
       if (!/^sensor\.[a-z0-9_]+$/.test(config.entity || '')) throw new Error('Select the pet health sensor');
-      this.config = {...config}; this.fr = config.language !== 'en'; this.lastHub = null; this.lastWeights = new Map(); this.lastDay = null;
+      const stale = config.weighing_warning_days ?? 7;
+      if (!Number.isInteger(stale) || stale < 0 || stale > 365) throw new Error('weighing_warning_days must be an integer from 0 to 365');
+      this.config = {...config,weighing_warning_days:stale}; this.fr = config.language !== 'en'; this.lastHub = null; this.lastWeights = new Map(); this.lastDay = null;
       if (!this.shadowRoot) this.attachShadow({mode:'open'});
       this.build(); if (this._hass) this.hass = this._hass;
     }
@@ -50,6 +52,7 @@
       style.textContent += `.identity{display:flex;align-items:center;gap:10px;margin:0 0 12px}.identity h3{margin:0;overflow-wrap:anywhere}.pet-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;flex:0 0 42px;border-radius:50%;overflow:hidden;color:#fff}.pet-avatar ha-icon{--mdc-icon-size:25px}.pet-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.care-entry{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px;padding:10px 0;border-bottom:1px solid var(--divider-color,#ddd)}.care-entry:last-child{border-bottom:0}.care-entry .pet-avatar{width:36px;height:36px;flex-basis:36px}.care-entry .pet-avatar ha-icon{--mdc-icon-size:21px}.care-content{min-width:0;overflow-wrap:anywhere}.care-content p,.care-meta p{margin:3px 0}.care-category{display:flex;gap:5px;align-items:center}.care-category ha-icon{--mdc-icon-size:16px}.care-meta{text-align:right;white-space:nowrap;font-size:13px}.care-meta time{font-weight:600}.care-status{font-size:12px}@media(max-width:440px){.care-entry{grid-template-columns:auto minmax(0,1fr)}.care-meta{grid-column:2;text-align:left;white-space:normal}}`;
       const card = txt('ha-card'); card.append(txt('h2',this.tr('Santé · suivi du poids','Health · weight tracking')));
       style.textContent += `.renew-care{font-size:12px;padding:6px 9px;margin-top:5px;max-width:100%;white-space:normal}`;
+      style.textContent += `.pet-avatar{width:56px;height:56px;flex-basis:56px}.pet-avatar ha-icon{--mdc-icon-size:32px}.care-entry .pet-avatar{width:44px;height:44px;flex-basis:44px}.care-entry .pet-avatar ha-icon{--mdc-icon-size:25px}.weight-age.stale{color:var(--warning-color,#9a5700);font-weight:600}.quick-weigh{width:100%;margin:0 0 10px;font-size:14px;white-space:normal}.pending-care{min-width:0}.pending-care.many{max-height:420px;overflow:auto}`;
       this.summary = txt('div',this.tr('Chargement…','Loading…')); card.append(this.summary);
       this.forms = txt('div'); this.forms.hidden=true; card.append(this.forms); this.buildForms();
       card.append(txt('p',this.tr('Suivi local. Le poids cible est défini avec le vétérinaire ; aucune modification automatique des repas.','Local tracking. Set targets with your veterinarian; meals are never adjusted automatically.'),'muted'));
@@ -218,9 +221,15 @@
       const heading=txt('div',null,'care-category'),icon=txt('ha-icon');icon.setAttribute('icon',Object.prototype.hasOwnProperty.call(CARE_ICONS,r.category)?CARE_ICONS[r.category]:CARE_ICONS.other);icon.setAttribute('aria-hidden','true');heading.append(icon,txt('strong',p.name+' — '+category));content.append(heading,txt('p',r.title));
       if(r.notes)content.append(txt('p',r.notes,'muted'));
       const date=pending?r.due_date:r.date,time=txt('time',this.displayDate(date));time.dateTime=date;meta.append(time);
-      const today=this.today();
-      const status=pending?(date<today?this.tr('En retard','Overdue'):date===today?this.tr('Aujourd’hui','Today'):this.tr('À venir','Upcoming')):this.tr('Enregistré','Recorded');
-      meta.append(txt('p',status,pending&&date<today?'error care-status':'muted care-status'));
+      const remaining=this.daysAgo(date);
+      let status=this.tr('Enregistré','Recorded');
+      if(pending){
+        if(remaining===null)status=this.tr('À venir','Upcoming');
+        else if(remaining===0)status=this.tr('Aujourd’hui','Today');
+        else if(remaining>0)status=this.tr(`En retard de ${remaining} j`,`Overdue by ${remaining} ${remaining===1?'day':'days'}`);
+        else status=this.tr(`Dans ${-remaining} j`,`In ${-remaining} ${remaining===-1?'day':'days'}`);
+      }
+      meta.append(txt('p',status,pending&&remaining>0?'error care-status':'muted care-status'));
       if(!pending&&r.due_date)content.append(txt('p',this.displayDate(r.due_date)+' · '+(r.completed?this.tr('Suivi effectué','Follow-up completed'):this.tr('Suivi ouvert','Open follow-up')),'muted'));
       if(pending){
         const button=txt('button',this.tr('Nouveau soin','New care'));button.type='button';button.className='renew-care';
@@ -232,11 +241,20 @@
       const a=txt('section',null,'food-row');a.append(txt('h3',this.tr('Carnet de santé','Care log')));
       const records=this.careHistory;const due=records.filter(r=>r.due_date&&!r.completed).slice().sort((x,y)=>x.due_date.localeCompare(y.due_date));
       a.append(txt('strong',this.tr('Prochaines échéances','Upcoming follow-ups')));if(!due.length)a.append(txt('p',this.tr('Aucune échéance ouverte.','No open follow-ups.'),'muted'));
-      const pending=txt('div',null,'scroll');for(const r of due)pending.append(this.careEntry(r,true));a.append(pending);
+      const pending=txt('div',null,due.length>3?'pending-care many':'pending-care');for(const r of due)pending.append(this.careEntry(r,true));a.append(pending);
       const detail=txt('details');detail.dataset.historyKey='care';detail.append(txt('summary',this.tr('Historique vétérinaire et observations','Veterinary and observation history')+` (${records.length})`));const wrap=txt('div',null,'scroll');
       for(const r of records.slice().reverse())wrap.append(this.careEntry(r,false));detail.append(wrap);a.append(detail);return a;
     }
     today() { try { return new Intl.DateTimeFormat('sv-SE',{timeZone:this._hass?.config?.time_zone||Intl.DateTimeFormat().resolvedOptions().timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); } catch { return ''; } }
+    startMeasurement(petId){
+      if(this.busy||this.forms.hidden||!this.profiles.some(p=>p.pet_id===petId))return;
+      const draft=!!this.old.value||this.replace.checked||[this.direct,this.gross,this.cage].some(e=>e.value!=='')||this.day.value!==this.today();
+      if(draft&&!window.confirm(this.tr('Abandonner la pesée non enregistrée ?','Discard the unsaved measurement?')))return;
+      this.pet.value=petId;this.refreshOld();this.clearMeasurement();this.source.value='home';
+      this.msg.className='status';this.msg.textContent='';
+      const detail=this.save.closest('details');detail.open=true;
+      detail.scrollIntoView({block:'start'});this.day.focus({preventScroll:true});
+    }
     clearMeasurement() {this.day.readOnly=false;this.day.value=this.today();this.direct.value='';this.gross.value='';this.cage.value='';this.replace.checked=false;this.old.value='';this.updateNet();}
     updateNet() {
       const cage=this.method.value==='cage';
@@ -309,7 +327,11 @@
     }
     petCard(p,rows,domain,color){
       const a=txt('section',null,'pet'),identity=txt('div',null,'identity');identity.append(this.avatar(p),txt('h3',p.name));
-      const age=this.daysAgo(p.latest_date);const date=p.latest_date?this.displayDate(p.latest_date)+(age===0?' · '+this.tr('Aujourd’hui','Today'):age>0?' · '+this.tr('Il y a '+age+' j',age+' days ago'):''):this.tr('Pas de pesée','No measurements');a.append(identity,txt('div',num(p.weight_kg)?this.fmt(p.weight_kg)+' kg':'—','weight'),txt('p',date,'muted'));
+      const age=this.daysAgo(p.latest_date), threshold=this.config.weighing_warning_days;
+      const stale=threshold>0&&(!p.latest_date||(age!==null&&age>=threshold));
+      const date=p.latest_date?this.displayDate(p.latest_date)+(age===0?' · '+this.tr('Aujourd’hui','Today'):age>0?' · '+this.tr('Il y a '+age+' j',age+' days ago'):''):this.tr('Pas de pesée','No measurements');
+      a.append(identity,txt('div',num(p.weight_kg)?this.fmt(p.weight_kg)+' kg':'—','weight'),txt('p',date+(stale?' · '+this.tr('Pesée à actualiser','Weighing due'):''),stale?'muted weight-age stale':'muted weight-age'));
+      const quick=txt('button',this.tr('Ajouter une pesée','Add a measurement'),'quick-weigh');quick.type='button';quick.setAttribute('aria-label',this.tr('Ajouter une pesée pour ','Add a measurement for ')+p.name);quick.addEventListener('click',()=>this.startMeasurement(p.pet_id));a.append(quick);
       const line=(label,value)=>{const l=txt('div',null,'line');l.append(txt('span',label,'muted'),txt('strong',value));a.append(l);};
       line(this.tr('Poids cible','Target'),num(p.target_kg)?this.pretty(p.target_kg)+' kg':'—');
       line(this.tr('Pesées enregistrées','Recorded weights'),num(p.measurement_count)?p.measurement_count:'—');
