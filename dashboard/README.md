@@ -231,7 +231,7 @@ python3 tools/test_pet_health_visuals.py
 The Playwright checks run headlessly with its bundled Chromium. Install browser
 system dependencies if requested by Playwright. No real feeder calls are made.
 
-## Health ergonomics (0.2.6-beta.3 development)
+## Health ergonomics (0.2.6-beta.3)
 
 The **Add a measurement** button opens the existing weighing form with the
 selected pet and today's date. It never saves a measurement on its own.
@@ -253,3 +253,28 @@ Follow-up dates now display a relative day count in HA's timezone. No new date
 is calculated or saved. Avatars are larger and up to three upcoming care items
 are shown without an internal scrollbar. Longer lists remain scrollable.
 No data migration or changes to feeding, calibration or cloud logic are needed.
+
+### Upgrade from beta.2
+
+1. Back up Home Assistant, including the local health store, dashboard config
+   and `www` directory. Do not remove the integration or the pet photos.
+2. Download beta.3 from HACS and restart Home Assistant Core.
+3. Replace only the existing card file with the matching release file:
+
+   ```sh
+   curl -fL https://raw.githubusercontent.com/GuillaumeBerland/ha-mova-nutripal/v0.2.6-beta.3/dashboard/mova-pet-health-card.js -o /config/www/mova-pet-health-card.js.new && mv /config/www/mova-pet-health-card.js.new /config/www/mova-pet-health-card.js
+   ```
+
+4. Edit the existing JavaScript module resource to
+   `/local/mova-pet-health-card.js?v=8` and reload the browser. Do not add a
+   duplicate resource or regenerate the dashboard.
+5. Verify the retained photos and histories, quick weighing selection for each
+   pet, the age warning, care date labels and mobile layout. Do not enter fake
+   care events or weights into real health records just to test the interface.
+
+The card setting is optional; no YAML edit is needed to use the default.
+The optional reminder automation is unchanged. If rolling back to beta.2,
+restore its matching JavaScript file and resource URL (use a fresh cache-busting
+query if needed); no health data rollback is required solely for this release.
+Continue real HA validation, including actual reminders, scheduled meals and
+the midnight boundary, before promoting to stable.

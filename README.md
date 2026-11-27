@@ -207,3 +207,13 @@ Existing health data is retained; back up before upgrading. A downgrade to
 beta.1 after saving visual fields requires restoring a compatible health file.
 The feeder, calibration, cloud polling and optional reminder automation are
 unchanged. Validate the release on real HA before considering it stable.
+
+### Health ergonomics (v0.2.6-beta.3)
+
+The interactive Health card adds quick weighing entry per pet, a configurable
+measurement-age warning, relative care follow-up dates, larger avatars and an
+improved upcoming-care list. See the [beta.3 setup and upgrade instructions](dashboard/README.md#health-ergonomics-026-beta3).
+The warning is a visual setting, not a medical recommendation or a change to
+notification scheduling. Existing profiles, photos, weights, food periods and
+care records are retained. No backend behavior or storage format changes.
+Update the local card resource to `?v=8` using the matching release file.

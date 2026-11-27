@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6-beta.3 — health dashboard ergonomics
+- Add a measurement directly from each pet card; preselect the pet and today's date, with confirmation before discarding an existing draft.
+- Highlight missing or old measurements using the optional card setting `weighing_warning_days` (default 7, 0 disables the warning).
+- Display relative care follow-up dates, larger avatars and up to three upcoming care items without an internal scrollbar.
+- Extend offline browser regression coverage for the new controls and date boundaries.
+- Update the existing local Health card resource to `?v=8` with the matching JavaScript file. No dashboard regeneration or re-import required.
+- No changes to health storage, feeding, calibration, cloud polling or reminder automation. Real HA validation remains necessary.
+
 ## 0.2.6-beta.2 — pet identity and care renewal
 - Optional per-pet colours and local photos, with a default cat icon when no photo is available.
 - Consistent identity in weight cards, charts and compact care entries; category-specific care icons.
