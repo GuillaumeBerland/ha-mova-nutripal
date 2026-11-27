@@ -9,7 +9,7 @@ import re
 
 from .state_store import save_state
 from .food_profiles import load_periods, record_period, describe_period
-from .veterinary_records import load_records, record_care
+from .veterinary_records import load_records, record_care, renew_care
 
 MAX_PETS = 20
 MAX_WEIGHTS = 1000
@@ -141,6 +141,10 @@ class PetHealth:
 
     def record_care(self, *, record, today, record_id=None, replace_existing=False):
         self.care_records = record_care(self.care_records, self.pets, record, today, record_id, replace_existing)
+
+    def renew_care(self, *, record, today, previous_record_id, expected_due_date):
+        self.care_records = renew_care(self.care_records, self.pets, record, today,
+                                      previous_record_id, expected_due_date)
 
     def export(self):
         return {'pets': deepcopy(self.pets), 'food_periods': deepcopy(self.food_periods), 'care_records': deepcopy(self.care_records)}

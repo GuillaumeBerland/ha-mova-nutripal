@@ -158,3 +158,21 @@ record_pet_care:
       default: false
       selector:
         boolean:
+renew_pet_care:
+  target:
+    entity:
+      integration: mova_nutripal
+      domain: sensor
+  fields:
+    previous_record_id:
+      required: true
+      selector:
+        text:
+    expected_due_date:
+      required: true
+      selector:
+        text:
+    record:
+      required: true
+      selector:
+        object: {}

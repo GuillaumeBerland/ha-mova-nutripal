@@ -49,6 +49,7 @@
       const style = txt('style',`:host{display:block;max-width:1100px;margin:0 auto;width:100%} ha-card{padding:20px;box-sizing:border-box;color:var(--primary-text-color);font-family:inherit} h2,h3,p{margin:0 0 12px} h2{font-size:21px} h3{font-size:17px} .muted{color:var(--secondary-text-color);font-size:13px} .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px} .pet{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:14px;min-width:0} .food-row{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px;margin-top:12px;min-width:0;display:grid;gap:8px}.food-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:8px 22px}.food-summary .line{margin:3px 0}.mixture{display:flex;height:12px;border-radius:8px;overflow:hidden}.mix-legend{display:flex;flex-wrap:wrap;gap:6px 16px}.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}.chart-controls{display:flex;align-items:center;gap:8px;margin:0 0 12px;flex-wrap:wrap}.weight{font-size:29px;font-weight:650;font-variant-numeric:tabular-nums} .line{display:flex;justify-content:space-between;gap:10px;margin:7px 0} .track{height:8px;background:var(--divider-color,#ddd);border-radius:8px;overflow:hidden;margin:9px 0} .fill{height:100%;background:var(--primary-color,#039be5)} svg{width:100%;height:auto;display:block;margin:10px 0} details{margin:14px 0 0;border-top:1px solid var(--divider-color,#ddd);padding-top:12px} summary{cursor:pointer;font-weight:600} form{display:grid;gap:10px;margin-top:12px} label{display:grid;gap:4px;font-size:14px} input,select,button{box-sizing:border-box;font:inherit;color:inherit;background:var(--card-background-color,var(--primary-background-color));border:1px solid var(--divider-color,#888);border-radius:7px;padding:9px;min-width:0} button{cursor:pointer;background:var(--primary-color,#039be5);color:var(--text-primary-color,#fff);font-weight:600} button:disabled{opacity:.5;cursor:default} .check{display:flex;align-items:center;gap:8px} .check input{width:auto} .error{color:var(--error-color,#c33);white-space:pre-wrap} .status{min-height:1em;font-size:13px;white-space:pre-wrap} .scroll{overflow:auto;max-height:260px} table{border-collapse:collapse;width:100%;font-size:13px} td,th{padding:7px;text-align:left;border-bottom:1px solid var(--divider-color,#ddd)} .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:10px} [hidden]{display:none!important}`);
       style.textContent += `.identity{display:flex;align-items:center;gap:10px;margin:0 0 12px}.identity h3{margin:0;overflow-wrap:anywhere}.pet-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;flex:0 0 42px;border-radius:50%;overflow:hidden;color:#fff}.pet-avatar ha-icon{--mdc-icon-size:25px}.pet-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.care-entry{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px;padding:10px 0;border-bottom:1px solid var(--divider-color,#ddd)}.care-entry:last-child{border-bottom:0}.care-entry .pet-avatar{width:36px;height:36px;flex-basis:36px}.care-entry .pet-avatar ha-icon{--mdc-icon-size:21px}.care-content{min-width:0;overflow-wrap:anywhere}.care-content p,.care-meta p{margin:3px 0}.care-category{display:flex;gap:5px;align-items:center}.care-category ha-icon{--mdc-icon-size:16px}.care-meta{text-align:right;white-space:nowrap;font-size:13px}.care-meta time{font-weight:600}.care-status{font-size:12px}@media(max-width:440px){.care-entry{grid-template-columns:auto minmax(0,1fr)}.care-meta{grid-column:2;text-align:left;white-space:normal}}`;
       const card = txt('ha-card'); card.append(txt('h2',this.tr('Santé · suivi du poids','Health · weight tracking')));
+      style.textContent += `.renew-care{font-size:12px;padding:6px 9px;margin-top:5px;max-width:100%;white-space:normal}`;
       this.summary = txt('div',this.tr('Chargement…','Loading…')); card.append(this.summary);
       this.forms = txt('div'); this.forms.hidden=true; card.append(this.forms); this.buildForms();
       card.append(txt('p',this.tr('Suivi local. Le poids cible est défini avec le vétérinaire ; aucune modification automatique des repas.','Local tracking. Set targets with your veterinarian; meals are never adjusted automatically.'),'muted'));
@@ -148,7 +149,10 @@
     }
     careCategories(){return [['consultation',this.tr('Consultation','Consultation')],['vaccination',this.tr('Vaccin','Vaccination')],['deworming',this.tr('Vermifuge','Deworming')],['parasite_control',this.tr('Antiparasitaire','Parasite control')],['treatment',this.tr('Traitement','Treatment')],['observation',this.tr('Observation','Observation')],['other',this.tr('Autre','Other')]];}
     buildCareForm(){
+      this.renewal=null;
       const d=txt('details');d.append(txt('summary',this.tr('Ajouter ou corriger un événement de santé','Add or correct a care record')));const f=txt('form');d.append(f);
+      this.careDetails=d;
+      this.renewalInfo=txt('p','','muted');this.renewalInfo.hidden=true;f.append(this.renewalInfo);
       this.carePet=this.field(f,this.tr('Animal','Pet'),'select',{required:true});
       this.careOld=this.field(f,this.tr('Événement existant','Existing record'),'select');
       this.careDate=this.field(f,this.tr('Date de l’événement','Event date'),'date',{required:true});
@@ -160,15 +164,39 @@
       this.careDone=check(this.tr('Suivi effectué','Follow-up completed'));this.careReplace=check(this.tr('Autoriser la correction','Allow correction'));
       f.append(txt('p',this.tr('Les échéances sont saisies manuellement selon les consignes du vétérinaire. Aucun traitement ni calendrier automatique.','Enter follow-up dates manually according to veterinary instructions. No automatic treatment or schedule.'),'muted'));
       this.csave=txt('button',this.tr('Enregistrer l’événement','Save care record'));this.csave.type='submit';f.append(this.csave);this.cmsg=txt('div','','status');this.cmsg.setAttribute('role','status');f.append(this.cmsg);
+      this.renewalCancel=txt('button',this.tr('Annuler le nouveau soin','Cancel new care'));this.renewalCancel.type='button';this.renewalCancel.hidden=true;
+      this.renewalCancel.addEventListener('click',()=>{if(!this.busy){this.setRenewal(null);this.careOld.value='';this.loadCare();this.cmsg.textContent='';}});f.append(this.renewalCancel);
       this.carePet.addEventListener('change',()=>{this.refreshCareOld(false);this.loadCare();});this.careOld.addEventListener('change',()=>this.loadCare());f.addEventListener('submit',e=>{e.preventDefault();this.saveCare();});this.forms.append(d);
       this.careDate.value=this.today();
     }
     refreshCareOld(preserve=true){const prev=preserve?this.careOld.value:'';this.careOld.replaceChildren();this.option(this.careOld,'',this.tr('Nouvel événement','New record'));for(const r of (this.careHistory||[]).filter(r=>r.pet_id===this.carePet.value).slice().reverse())this.option(this.careOld,r.record_id,this.displayDate(r.date)+' · '+r.title);if([...this.careOld.options].some(o=>o.value===prev))this.careOld.value=prev;}
     loadCare(){const r=(this.careHistory||[]).find(r=>r.record_id===this.careOld.value&&r.pet_id===this.carePet.value);this.careDate.value=r?.date||this.today();this.careCategory.value=r?.category||'consultation';this.careTitle.value=r?.title||'';this.careNotes.value=r?.notes||'';this.careDue.value=r?.due_date||'';this.careDone.checked=!!r?.completed;this.careReplace.checked=false;}
+    setRenewal(r){
+      this.renewal=r;const active=!!r;
+      this.carePet.disabled=active;this.careCategory.disabled=active;
+      for(const field of [this.careOld,this.careDone,this.careReplace]){field.disabled=active;field.parentElement.hidden=active;}
+      this.renewalInfo.hidden=!active;this.renewalCancel.hidden=!active;
+      this.renewalInfo.textContent=active?this.tr('Le nouveau soin clôturera l’échéance du ','The new care will close the follow-up of ')+this.displayDate(r.due_date)+' · '+r.title:'';
+      this.csave.textContent=active?this.tr('Enregistrer et clôturer l’échéance','Save and close follow-up'):this.tr('Enregistrer l’événement','Save care record');
+    }
+    startRenewal(r){
+      if(this.busy||!r.due_date||r.completed)return;
+      this.carePet.value=r.pet_id;this.refreshCareOld(false);this.careOld.value='';this.loadCare();
+      this.careCategory.value=r.category;this.careTitle.value=r.title;
+      // Date defaults to today, but notes and the next due date are never copied.
+      this.setRenewal({...r});this.cmsg.textContent='';this.careDetails.open=true;
+      this.careDetails.scrollIntoView({block:'start'});this.careDate.focus({preventScroll:true});
+    }
     async saveCare(){
       if(this.busy)return;
       const id=this.careOld.value;const record={pet_id:this.carePet.value,date:this.careDate.value,category:this.careCategory.value,title:this.careTitle.value,notes:this.careNotes.value,completed:this.careDone.checked};if(this.careDue.value)record.due_date=this.careDue.value;
       if(!record.pet_id||!record.date)return;
+      if(this.renewal){
+        const previous=this.renewal;
+        const data={record,previous_record_id:previous.record_id,expected_due_date:previous.due_date};
+        if(await this.action('renew_pet_care',data,this.csave,this.cmsg)){this.setRenewal(null);this.careOld.value='';this.loadCare();}
+        return;
+      }
       if(record.completed&&!record.due_date){this.cmsg.textContent=this.tr('Une échéance est nécessaire pour marquer le suivi effectué.','A follow-up date is required to mark it completed.');return;}
       if(id&&(!this.careReplace.checked||!window.confirm(this.tr('Corriger cet événement existant ?','Correct this existing record?'))))return;
       const data={record,replace_existing:!!id};if(id)data.record_id=id;
@@ -194,6 +222,10 @@
       const status=pending?(date<today?this.tr('En retard','Overdue'):date===today?this.tr('Aujourd’hui','Today'):this.tr('À venir','Upcoming')):this.tr('Enregistré','Recorded');
       meta.append(txt('p',status,pending&&date<today?'error care-status':'muted care-status'));
       if(!pending&&r.due_date)content.append(txt('p',this.displayDate(r.due_date)+' · '+(r.completed?this.tr('Suivi effectué','Follow-up completed'):this.tr('Suivi ouvert','Open follow-up')),'muted'));
+      if(pending){
+        const button=txt('button',this.tr('Nouveau soin','New care'));button.type='button';button.className='renew-care';
+        button.addEventListener('click',()=>this.startRenewal(r));content.append(button);
+      }
       row.append(this.avatar(p),content,meta);return row;
     }
     careCard(){

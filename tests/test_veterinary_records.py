@@ -72,6 +72,49 @@ class CareTests(unittest.TestCase):
         self.add();state=self.m.export();state['care_records'].append(state['care_records'][0].copy())
         with self.assertRaises(ValueError):health.PetHealth(state)
 
+    def test_renewal_preserves_old_event_and_other_data(self):
+        self.add();self.add(event(pet_id='cat_b'));old=self.m.export()
+        previous=next(r for r in old['care_records'] if r['pet_id']=='cat_a')
+        record=event(date=TODAY.isoformat(),title='New vaccine',notes='',due_date='2027-11-26')
+        self.m.renew_care(record=record,today=TODAY,previous_record_id=previous['record_id'],expected_due_date=previous['due_date'])
+        state=self.m.export();rows=state['care_records'];self.assertEqual(len(rows),3)
+        self.assertIn(dict(previous,completed=True),rows)
+        self.assertIn(next(r for r in old['care_records'] if r['pet_id']=='cat_b'),rows)
+        new=next(r for r in rows if r['title']=='New vaccine')
+        self.assertFalse(new['completed']);self.assertEqual(new['due_date'],'2027-11-26')
+        self.assertEqual(state['pets'],old['pets']);self.assertEqual(state['food_periods'],old['food_periods'])
+        self.assertEqual(health.PetHealth(state).export(),state)
+        with self.assertRaises(ValueError):
+            self.m.renew_care(record=record,today=TODAY,previous_record_id=previous['record_id'],expected_due_date=previous['due_date'])
+        self.assertEqual(self.m.export(),state)
+
+    def test_renewal_rejects_invalid_or_stale_requests_atomically(self):
+        self.add();old=self.m.export();previous=old['care_records'][0]
+        valid=event(date=TODAY.isoformat(),title='New vaccine',due_date=None)
+        args=dict(today=TODAY,previous_record_id=previous['record_id'],expected_due_date=previous['due_date'])
+        for record,overrides in [(event(),{}),(dict(valid,pet_id='cat_b'),{}),
+                (dict(valid,category='consultation'),{}),(dict(valid,date='2026-11-19'),{}),
+                (dict(valid,date='2026-11-27'),{}),(dict(valid,title=' '),{}),
+                (dict(valid,due_date='2026-11-25'),{}),(dict(valid,completed=True,due_date='2027-11-26'),{}),
+                (valid,{'previous_record_id':'f'*32}),(valid,{'expected_due_date':'2027-11-21'})]:
+            with self.subTest(record=record,overrides=overrides),self.assertRaises(ValueError):
+                self.m.renew_care(record=record,**dict(args,**overrides))
+            self.assertEqual(self.m.export(),old)
+        with patch(PACKAGE+'.veterinary_records.MAX_RECORDS',1),self.assertRaises(ValueError):
+            self.m.renew_care(record=valid,**args)
+        self.assertEqual(self.m.export(),old)
+        self.m.renew_care(record=valid,**args)
+        self.assertIsNone(self.m.export()['care_records'][-1]['due_date'])
+
+    def test_renewal_rejects_duplicate_new_event_and_record_without_due_date(self):
+        self.add();self.add(event(date=TODAY.isoformat(),title='Already saved',due_date=None))
+        old=self.m.export();previous,new=old['care_records']
+        for record,prev,due in [(event(date=TODAY.isoformat(),title='Already saved',due_date=None),previous,previous['due_date']),
+                                (event(date=TODAY.isoformat(),title='Another'),new,previous['due_date'])]:
+            with self.assertRaises(ValueError):
+                self.m.renew_care(record=record,today=TODAY,previous_record_id=prev['record_id'],expected_due_date=due)
+            self.assertEqual(self.m.export(),old)
+
     def test_native_summary_is_read_only(self):
         from test_pet_health_dashboard import with_health, dashboard
         card=dashboard.pet_health_card(dashboard.find_entities(with_health()),'fr')

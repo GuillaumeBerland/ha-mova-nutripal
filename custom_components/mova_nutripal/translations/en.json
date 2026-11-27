@@ -411,6 +411,24 @@
           "description": "Explicit permission to correct."
         }
       }
+    },
+    "renew_pet_care": {
+      "name": "Record new care and close follow-up",
+      "description": "Close one open follow-up and record new care in one local save.",
+      "fields": {
+        "previous_record_id": {
+          "name": "Previous care record ID",
+          "description": "ID of the care record with the open follow-up."
+        },
+        "expected_due_date": {
+          "name": "Expected previous due date",
+          "description": "ISO date (YYYY-MM-DD) of the follow-up to close."
+        },
+        "record": {
+          "name": "New care record",
+          "description": "Same pet and category; date, title, optional notes and next due date."
+        }
+      }
     }
   }
 }

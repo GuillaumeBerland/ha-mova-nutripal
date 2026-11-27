@@ -90,3 +90,27 @@ def record_care(rows, pets, record, today, record_id=None, replace_existing=Fals
         result = list(rows)
     result.append(dict(record_id=record_id, **candidate))
     return sorted(result, key=lambda r: (r['date'], r['record_id']))
+
+
+
+def renew_care(rows, pets, record, today, previous_record_id, expected_due_date):
+    """Close one open follow-up and append a distinct new event atomically."""
+    if not isinstance(previous_record_id, str) or not _ID.fullmatch(previous_record_id):
+        raise ValueError('Invalid previous care record ID')
+    old = next((r for r in rows if r['record_id'] == previous_record_id), None)
+    if old is None or old['completed'] or old['due_date'] is None:
+        raise ValueError('Previous follow-up is no longer open')
+    if _day(expected_due_date) != old['due_date']:
+        raise ValueError('Previous follow-up date changed; reload before retrying')
+    candidate = _record(record, pets, today)
+    if candidate['pet_id'] != old['pet_id'] or candidate['category'] != old['category']:
+        raise ValueError('New care must match the previous pet and category')
+    if candidate['date'] < old['date'] or candidate['completed']:
+        raise ValueError('New care must not precede the old event or be already completed')
+    if any({k: v for k, v in r.items() if k != 'record_id'} == candidate for r in rows):
+        raise ValueError('Identical care already recorded; review the history')
+    # record_care validates the capacity before returning a new list. The old
+    # rows are never mutated, and no result is returned if either step fails.
+    added = record_care(rows, pets, candidate, today)
+    return [dict(r, completed=True) if r['record_id'] == previous_record_id else r
+            for r in added]

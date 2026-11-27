@@ -138,6 +138,32 @@ def run(browser):
     page.wait_for_function('calls.length===6')
     assert page.evaluate('calls[5][2].record.completed') is True
     assert page.evaluate('calls[5][2].record_id') == 'a'*32
+    # Mock service does not update the state; the original follow-up is still open.
+    root.get_by_role('button',name='Nouveau soin',exact=True).click()
+    assert page.evaluate('card.carePet.value') == 'cat_b'
+    assert page.evaluate('card.carePet.disabled && card.careCategory.disabled')
+    assert page.evaluate('card.careCategory.value') == 'vaccination'
+    assert page.evaluate('card.careTitle.value') == 'Example vaccine'
+    assert page.evaluate('card.careDate.value===card.today()')
+    assert page.evaluate('card.careDue.value') == ''
+    assert page.evaluate('card.careNotes.value') == ''
+    root.get_by_role('button',name='Annuler le nouveau soin').click()
+    assert page.evaluate('calls.length') == 6
+    assert not page.evaluate('card.carePet.disabled')
+    root.get_by_role('button',name='Nouveau soin',exact=True).click()
+    page.evaluate("""()=>{card.careDate.value='2024-11-01';card.careDue.value='2027-11-01';card.careTitle.value='New vaccine';window.fail=true;}""")
+    root.get_by_role('button',name='Enregistrer et clôturer l’échéance').click()
+    page.wait_for_function('calls.length===7 && !card.busy')
+    assert 'Test error' in root.locator('ha-card').inner_text()
+    assert page.evaluate('card.renewal.record_id') == 'a'*32
+    page.evaluate('window.fail=false')
+    root.get_by_role('button',name='Enregistrer et clôturer l’échéance').click()
+    page.wait_for_function('calls.length===8 && !card.busy')
+    assert page.evaluate('calls[7]') == ['mova_nutripal','renew_pet_care',{'record':{'pet_id':'cat_b','date':'2024-11-01','category':'vaccination','title':'New vaccine','notes':'','completed':False,'due_date':'2027-11-01'},'previous_record_id':'a'*32,'expected_due_date':'2025-10-30'},{'entity_id':'sensor.hub'}]
+    assert page.evaluate('card.renewal===null && !card.carePet.disabled')
+    page.evaluate("""()=>{const old=hass.states['sensor.hub'].attributes.care_records[0];hass.states['sensor.hub']={...hass.states['sensor.hub'],attributes:{...hass.states['sensor.hub'].attributes,care_records:[{...old,completed:true},{...calls[7][2].record,record_id:'b'.repeat(32)}]}};card.hass=hass;}""")
+    assert root.get_by_role('button',name='Nouveau soin',exact=True).count() == 1
+    assert 'New vaccine' in root.locator('.care-entry').first.inner_text()
     # Narrow layout and unavailable hub. Form must be hidden and no actions fired.
     page.set_viewport_size({'width':390,'height':800})
     assert root.evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')

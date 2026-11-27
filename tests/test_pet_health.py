@@ -273,6 +273,36 @@ class PetHealthAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(health.load_health(self.manager.path).export()['care_records'],rows)
         self.assertIn('care_records',self.hub._unrecorded_attributes)
 
+    async def test_renew_care_action_is_one_durable_save(self):
+        sensor=await self.create()
+        record={'pet_id':'cat_a','date':'2026-11-20','category':'consultation','title':'Example visit','due_date':'2026-12-20'}
+        await self.hub.async_record_pet_care(record=record)
+        old=self.manager.model.export();previous=old['care_records'][0]
+        data={'record':dict(record,date=TODAY.isoformat(),title='New visit',due_date=None),
+              'previous_record_id':previous['record_id'],'expected_due_date':previous['due_date']}
+        call=types.SimpleNamespace(data=data)
+        for targets in ([],[sensor],[self.hub,sensor]):
+            with self.assertRaises(RuntimeError):await self.adapter._renew_pet_care(targets,call)
+        self.assertEqual(self.manager.model.export(),old)
+        with patch.object(self.adapter,'save_health',wraps=health.save_health) as save:
+            await self.adapter._renew_pet_care([self.hub],call)
+            self.assertEqual(save.call_count,1)
+        rows=self.hub.extra_state_attributes['care_records']
+        self.assertEqual(len(rows),2);self.assertIn(dict(previous,completed=True),rows)
+        self.assertEqual(health.load_health(self.manager.path).export()['care_records'],rows)
+
+    async def test_renew_care_failed_save_preserves_previous_follow_up(self):
+        await self.create()
+        record={'pet_id':'cat_a','date':'2026-11-20','category':'consultation','title':'Example visit','due_date':'2026-12-20'}
+        await self.hub.async_record_pet_care(record=record)
+        old=self.manager.model.export();previous=old['care_records'][0]
+        with patch.object(self.adapter,'save_health',side_effect=OSError('test failure')),self.assertRaises(RuntimeError):
+            await self.hub.async_renew_pet_care(record=dict(record,date=TODAY.isoformat(),title='New visit'),
+                previous_record_id=previous['record_id'],expected_due_date=previous['due_date'])
+        self.assertFalse(self.hub.available)
+        self.assertEqual(self.manager.model.export(),old)
+        self.assertEqual(health.load_health(self.manager.path).export(),old)
+
     async def test_cancelled_write_cannot_be_overwritten(self):
         await self.create()
         started, release = asyncio.Event(), asyncio.Event()

@@ -141,6 +141,9 @@ class PetHealthSensor(HealthEntity):
     async def async_record_pet_care(self, **kwargs):
         await self.manager.async_change('record_care', **kwargs)
 
+    async def async_renew_pet_care(self, **kwargs):
+        await self.manager.async_change('renew_care', **kwargs)
+
     async def async_record_pet_weights(self, **kwargs):
         await self.manager.async_change('record_weights', **kwargs)
 
@@ -206,6 +209,11 @@ async def async_setup_pet_health(hass, entry, did, async_add_entities):
             vol.Optional('record_id'): str,
             vol.Optional('replace_existing', default=False): cv.boolean,
         }, _record_pet_care),
+        ('renew_pet_care', {
+            vol.Required('record'): dict,
+            vol.Required('previous_record_id'): str,
+            vol.Required('expected_due_date'): str,
+        }, _renew_pet_care),
         ('record_pet_weights', {
             vol.Required('pet_id'): str,
             vol.Required('measurements'): list,
@@ -237,3 +245,7 @@ async def _record_food_period(entities, call):
 
 async def _record_pet_care(entities, call):
     await _one_health_sensor(entities).async_record_pet_care(**call.data)
+
+
+async def _renew_pet_care(entities, call):
+    await _one_health_sensor(entities).async_renew_pet_care(**call.data)

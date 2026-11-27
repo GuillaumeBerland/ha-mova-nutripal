@@ -411,6 +411,24 @@
           "description": "Confirmation explicite de la correction."
         }
       }
+    },
+    "renew_pet_care": {
+      "name": "Enregistrer un nouveau soin et clôturer le suivi",
+      "description": "Clôture une échéance ouverte et enregistre le nouveau soin dans une seule sauvegarde locale.",
+      "fields": {
+        "previous_record_id": {
+          "name": "Identifiant du soin précédent",
+          "description": "Identifiant du soin dont le suivi est ouvert."
+        },
+        "expected_due_date": {
+          "name": "Échéance précédente attendue",
+          "description": "Date ISO (AAAA-MM-JJ) de l’échéance à clôturer."
+        },
+        "record": {
+          "name": "Nouveau soin",
+          "description": "Même animal et catégorie ; date, titre, notes et nouvelle échéance facultative."
+        }
+      }
     }
   }
 }
