@@ -303,6 +303,50 @@ class PetHealthAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.manager.model.export(),old)
         self.assertEqual(health.load_health(self.manager.path).export(),old)
 
+    async def test_concurrent_renewals_close_previous_only_once(self):
+        await self.create()
+        record = {'pet_id':'cat_a','date':'2026-11-20','category':'consultation',
+                  'title':'Previous visit','due_date':'2026-12-20'}
+        await self.hub.async_record_pet_care(record=record)
+        previous = self.manager.model.export()['care_records'][0]
+        args = dict(previous_record_id=previous['record_id'], expected_due_date=previous['due_date'])
+        new = dict(record, date=TODAY.isoformat(), title='New visit')
+        with patch.object(self.adapter, 'save_health', wraps=health.save_health) as save:
+            results = await asyncio.gather(
+                self.hub.async_renew_pet_care(record=new, **args),
+                self.hub.async_renew_pet_care(record=dict(new, title='Competing visit'), **args),
+                return_exceptions=True)
+            self.assertEqual(sum(r is None for r in results), 1)
+            self.assertEqual(sum(isinstance(r, RuntimeError) for r in results), 1)
+            self.assertEqual(save.call_count, 1)
+        rows = self.manager.model.export()['care_records']
+        self.assertEqual(len(rows), 2)
+        self.assertIn(dict(previous, completed=True), rows)
+        self.assertEqual(len([r for r in rows if not r['completed']]), 1)
+        self.assertTrue(self.hub.available)
+        self.assertEqual(health.load_health(self.manager.path).export()['care_records'], rows)
+
+    async def test_concurrent_visual_edit_and_renewal_preserve_both_changes(self):
+        await self.create()
+        await self.hub.async_record_pet_weights(pet_id='cat_a', measurements=[direct()])
+        record = {'pet_id':'cat_a','date':'2026-11-20','category':'consultation',
+                  'title':'Previous visit','due_date':'2026-12-20'}
+        await self.hub.async_record_pet_care(record=record)
+        previous = self.manager.model.export()['care_records'][0]
+        await asyncio.gather(
+            self.hub.async_save_pet_profile(pet_id='cat_a', name='Renamed',
+                                            color='#123456', photo_url='/local/pets/example.png'),
+            self.hub.async_renew_pet_care(record=dict(record, date=TODAY.isoformat(), title='New visit'),
+                previous_record_id=previous['record_id'], expected_due_date=previous['due_date']))
+        state = self.manager.model.export()
+        summary = self.manager.model.summary('cat_a')
+        self.assertEqual((summary['name'], summary['color'], summary['photo_url']),
+                         ('Renamed', '#123456', '/local/pets/example.png'))
+        self.assertEqual((summary['weight_kg'], summary['target_kg']), (4.5, 4))
+        self.assertEqual(len(state['care_records']), 2)
+        self.assertIn(dict(previous, completed=True), state['care_records'])
+        self.assertEqual(health.load_health(self.manager.path).export(), state)
+
     async def test_cancelled_write_cannot_be_overwritten(self):
         await self.create()
         started, release = asyncio.Event(), asyncio.Event()
